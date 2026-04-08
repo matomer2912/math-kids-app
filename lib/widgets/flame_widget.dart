@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/strings.dart';
 
 class FlameWidget extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -54,10 +55,10 @@ class _FlameWidgetState extends State<FlameWidget>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('🔥🔥🔥', style: TextStyle(fontSize: 64)),
+              const Text(S.flameText, style: TextStyle(fontSize: 64)),
               const SizedBox(height: 8),
               Text(
-                'מדהים! 5 ברצף!',
+                S.flameMessage,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/strings.dart';
 import '../services/storage_service.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../theme/app_theme.dart';
@@ -31,17 +32,12 @@ class _HighScoresScreenState extends State<HighScoresScreen> {
 
   String _formatKey(String key) {
     final parts = key.split('_');
-    if (parts.length < 2) return key;
-    final ops = parts.first.split('-').map((o) {
-      switch (o) {
-        case 'addition': return 'חיבור';
-        case 'subtraction': return 'חיסור';
-        case 'multiplication': return 'כפל';
-        case 'division': return 'חילוק';
-        default: return o;
-      }
-    }).join(', ');
-    return '$ops | עד ${parts.last}';
+    if (parts.length < 2) { return key; }
+    final ops = parts.first
+        .split('-')
+        .map((o) => S.opNames[o] ?? o)
+        .join(', ');
+    return '$ops | ${S.upTo(int.tryParse(parts.last) ?? 0)}';
   }
 
   @override
@@ -50,7 +46,7 @@ class _HighScoresScreenState extends State<HighScoresScreen> {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('🏆 שיאים')),
+      appBar: AppBar(title: const Text(S.highScoresTitle)),
       body: Column(
         children: [
           Expanded(
@@ -58,14 +54,21 @@ class _HighScoresScreenState extends State<HighScoresScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : sorted.isEmpty
                     ? const Center(
-                        child: Text('עדיין אין שיאים.\nשחק משחק ראשון!',
+                        child: Text(S.noScoresYet,
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 20, color: Colors.grey)))
+                            style: TextStyle(
+                                fontSize: 20, color: Colors.grey)))
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: sorted.length,
                         itemBuilder: (_, i) {
-                          final medal = i == 0 ? '🥇' : i == 1 ? '🥈' : i == 2 ? '🥉' : '  ';
+                          final medal = i == 0
+                              ? '\ud83e\udd47'
+                              : i == 1
+                                  ? '\ud83e\udd48'
+                                  : i == 2
+                                      ? '\ud83e\udd49'
+                                      : '  ';
                           return Card(
                             margin: const EdgeInsets.symmetric(vertical: 6),
                             shape: RoundedRectangleBorder(

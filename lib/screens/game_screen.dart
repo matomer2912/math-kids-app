@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/strings.dart';
 import '../models/question.dart';
 import '../models/game_session.dart';
 import '../services/question_generator.dart';
@@ -26,7 +27,8 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateMixin {
+class _GameScreenState extends State<GameScreen>
+    with SingleTickerProviderStateMixin {
   final _generator = QuestionGenerator();
   final _storage = StorageService();
   final _controller = TextEditingController();
@@ -41,7 +43,6 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
   DateTime? _questionStart;
 
   late AnimationController _shakeController;
-  late Animation<double> _shakeAnim;
 
   @override
   void initState() {
@@ -53,8 +54,6 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
     );
     _shakeController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));
-    _shakeAnim = Tween(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn));
     _nextQuestion();
   }
 
@@ -79,14 +78,14 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
       _questionStart = DateTime.now();
     });
     Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) _focusNode.requestFocus();
+      if (mounted) { _focusNode.requestFocus(); }
     });
   }
 
   void _submitAnswer() {
-    if (_answered) return;
+    if (_answered) { return; }
     final input = int.tryParse(_controller.text.trim());
-    if (input == null) return;
+    if (input == null) { return; }
 
     final elapsed = DateTime.now().difference(_questionStart!).inSeconds;
     final isCorrect = input == _currentQuestion.correctAnswer;
@@ -113,7 +112,7 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
     setState(() {
       _answered = true;
       _lastCorrect = isCorrect;
-      if (_streak > 0 && _streak % 5 == 0) _showFlame = true;
+      if (_streak > 0 && _streak % 5 == 0) { _showFlame = true; }
     });
 
     if (!_showFlame) {
@@ -140,7 +139,7 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
     await _storage.recordErrors(wrongKeys);
     final runCount = await _storage.incrementRunCount();
 
-    if (!mounted) return;
+    if (!mounted) { return; }
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -155,8 +154,8 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-            'שאלה ${_session.results.length + 1} מתוך ${widget.questionCount}'),
+        title: Text(S.questionProgress(
+            _session.results.length + 1, widget.questionCount)),
         automaticallyImplyLeading: false,
       ),
       body: Stack(
@@ -170,7 +169,8 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                 color: AppTheme.primary,
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -183,10 +183,12 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                     ]),
                     if (_streak > 0)
                       Row(children: [
-                        const Text('🔥', style: TextStyle(fontSize: 18)),
-                        Text(' רצף: $_streak',
+                        const Text('\ud83d\udd25',
+                            style: TextStyle(fontSize: 18)),
+                        Text(' ${S.streak(_streak)}',
                             style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.orange)),
                       ]),
                   ],
@@ -199,11 +201,12 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       AnimatedBuilder(
-                        animation: _shakeAnim,
+                        animation: _shakeController,
                         builder: (_, child) => Transform.translate(
                           offset: Offset(
-                              _shakeAnim.value * 8 *
-                                  (_shakeController.isAnimating ? (_shakeController.value < 0.5 ? 1 : -1) : 0),
+                              _shakeController.isAnimating
+                                  ? (_shakeController.value < 0.5 ? 8 : -8)
+                                  : 0,
                               0),
                           child: child,
                         ),
@@ -234,11 +237,15 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            _lastCorrect! ? '✅ נכון!' : '❌ התשובה הנכונה: ${_currentQuestion.correctAnswer}',
+                            _lastCorrect!
+                                ? S.correct
+                                : S.wrong(_currentQuestion.correctAnswer),
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: _lastCorrect! ? AppTheme.correctColor : AppTheme.wrongColor,
+                              color: _lastCorrect!
+                                  ? AppTheme.correctColor
+                                  : AppTheme.wrongColor,
                             ),
                           ),
                         ),
@@ -266,7 +273,7 @@ class _GameScreenState extends State<GameScreen> with SingleTickerProviderStateM
                         const SizedBox(height: 20),
                         ElevatedButton(
                           onPressed: _submitAnswer,
-                          child: const Text('בדוק תשובה'),
+                          child: const Text(S.checkAnswer),
                         ),
                       ],
                     ],

@@ -1,21 +1,23 @@
+import '../constants/strings.dart';
+
 enum Operation { addition, subtraction, multiplication, division }
 
 extension OperationExtension on Operation {
   String get symbol {
     switch (this) {
-      case Operation.addition: return '+';
-      case Operation.subtraction: return '−';
-      case Operation.multiplication: return '×';
-      case Operation.division: return '÷';
+      case Operation.addition:       return '+';
+      case Operation.subtraction:    return '\u2212';
+      case Operation.multiplication: return '\u00d7';
+      case Operation.division:       return '\u00f7';
     }
   }
 
   String get hebrewName {
     switch (this) {
-      case Operation.addition: return 'חיבור';
-      case Operation.subtraction: return 'חיסור';
-      case Operation.multiplication: return 'כפל';
-      case Operation.division: return 'חילוק';
+      case Operation.addition:       return S.opAddition;
+      case Operation.subtraction:    return S.opSubtraction;
+      case Operation.multiplication: return S.opMultiplication;
+      case Operation.division:       return S.opDivision;
     }
   }
 }

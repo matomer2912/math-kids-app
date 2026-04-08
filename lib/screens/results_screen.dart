@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/strings.dart';
 import '../models/game_session.dart';
 import '../widgets/ad_banner_widget.dart';
 import '../theme/app_theme.dart';
@@ -11,11 +12,18 @@ class ResultsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = (session.correctCount / session.totalQuestions * 100).round();
-    final emoji = percent == 100 ? '🏆' : percent >= 80 ? '⭐' : percent >= 60 ? '👍' : '💪';
+    final percent =
+        (session.correctCount / session.totalQuestions * 100).round();
+    final emoji = percent == 100
+        ? '\ud83c\udfc6'
+        : percent >= 80
+            ? '\u2b50'
+            : percent >= 60
+                ? '\ud83d\udc4d'
+                : '\ud83d\udcaa';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('תוצאות')),
+      appBar: AppBar(title: const Text(S.resultsTitle)),
       body: Column(
         children: [
           Expanded(
@@ -27,17 +35,19 @@ class ResultsScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text('$percent%',
                       style: const TextStyle(
-                          fontSize: 64, fontWeight: FontWeight.bold,
+                          fontSize: 64,
+                          fontWeight: FontWeight.bold,
                           color: AppTheme.primaryDark)),
-                  Text('${session.correctCount} מתוך ${session.totalQuestions} נכונות',
-                      style: const TextStyle(fontSize: 20, color: Colors.grey)),
+                  Text(S.correctOf(session.correctCount, session.totalQuestions),
+                      style:
+                          const TextStyle(fontSize: 20, color: Colors.grey)),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.star, color: AppTheme.accent),
                       const SizedBox(width: 6),
-                      Text('${session.totalScore} נקודות',
+                      Text(S.points(session.totalScore),
                           style: const TextStyle(
                               fontSize: 24, fontWeight: FontWeight.bold)),
                     ],
@@ -46,10 +56,11 @@ class ResultsScreen extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Text(
-                        '🎯 אחרי ${runCount} ריצות זוהו לך תרגילים לתרגול מיוחד!',
+                        S.hardUnlocked(runCount),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                            fontSize: 16, color: AppTheme.accent,
+                            fontSize: 16,
+                            color: AppTheme.accent,
                             fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -59,7 +70,9 @@ class ResultsScreen extends StatelessWidget {
                   ...session.results.map((r) => ListTile(
                         leading: Icon(
                           r.isCorrect ? Icons.check_circle : Icons.cancel,
-                          color: r.isCorrect ? AppTheme.correctColor : AppTheme.wrongColor,
+                          color: r.isCorrect
+                              ? AppTheme.correctColor
+                              : AppTheme.wrongColor,
                         ),
                         title: Text(
                           '${r.question.display.replaceAll('?', '')}${r.userAnswer}',
@@ -70,14 +83,15 @@ class ResultsScreen extends StatelessWidget {
                                 style: const TextStyle(
                                     color: AppTheme.correctColor,
                                     fontWeight: FontWeight.bold))
-                            : Text('✗ ${r.question.correctAnswer}',
-                                style: const TextStyle(color: AppTheme.wrongColor)),
+                            : Text('\u2717 ${r.question.correctAnswer}',
+                                style: const TextStyle(
+                                    color: AppTheme.wrongColor)),
                       )),
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () =>
                         Navigator.popUntil(context, (r) => r.isFirst),
-                    child: const Text('חזור לתפריט הראשי'),
+                    child: const Text(S.backToMenu),
                   ),
                 ],
               ),

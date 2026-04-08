@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/strings.dart';
 import '../models/question.dart';
 import '../services/storage_service.dart';
 import '../widgets/ad_banner_widget.dart';
@@ -49,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _startGame() {
     if (_activeOps.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('בחרי לפחות פעולה אחת')),
+        const SnackBar(content: Text(S.noOpSelected)),
       );
       return;
     }
@@ -70,11 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('מתמטיקה כיפית 🎉'),
+        title: const Text(S.appTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.emoji_events),
-            tooltip: 'שיאים',
+            tooltip: S.highScoresTooltip,
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const HighScoresScreen()),
@@ -91,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _SectionCard(
-                    title: 'בחר פעולות חשבון',
+                    title: S.chooseOperations,
                     child: Wrap(
                       spacing: 10,
                       runSpacing: 10,
@@ -111,14 +112,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 16),
                   _SectionCard(
-                    title: 'מספר שאלות',
+                    title: S.questionCount,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [5, 10, 20].map((n) {
-                        final selected = _questionCount == n;
                         return _ChoiceButton(
                           label: '$n',
-                          selected: selected,
+                          selected: _questionCount == n,
                           onTap: () => setState(() => _questionCount = n),
                         );
                       }).toList(),
@@ -126,22 +126,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 16),
                   _SectionCard(
-                    title: 'גובה המספרים',
+                    title: S.numberLevel,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         _ChoiceButton(
-                          label: 'עד 50\nקל',
+                          label: S.levelEasy,
                           selected: _maxNumber == 50,
                           onTap: () => setState(() => _maxNumber = 50),
                         ),
                         _ChoiceButton(
-                          label: 'עד 100\nבינוני',
+                          label: S.levelMedium,
                           selected: _maxNumber == 100,
                           onTap: () => setState(() => _maxNumber = 100),
                         ),
                         _ChoiceButton(
-                          label: 'עד 200\nקשה',
+                          label: S.levelHard,
                           selected: _maxNumber == 200,
                           onTap: () => setState(() => _maxNumber = 200),
                         ),
@@ -151,12 +151,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_runCount >= 10 && _hardQuestions.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     _SectionCard(
-                      title: '🎯 מצב תרגול מיוחד',
+                      title: S.hardModeSection,
                       child: SwitchListTile(
-                        title: const Text('תרגל את התרגילים הקשים שלך',
+                        title: const Text(S.hardModeLabel,
                             style: TextStyle(fontSize: 16)),
-                        subtitle: Text(
-                            'זוהו ${_hardQuestions.length} תרגילים שצריכים תרגול'),
+                        subtitle: Text(S.hardModeSubtitle(_hardQuestions.length)),
                         value: _hardMode,
                         activeColor: AppTheme.accent,
                         onChanged: (val) => setState(() => _hardMode = val),
@@ -170,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       textStyle: const TextStyle(fontSize: 22),
                     ),
-                    child: const Text('🚀 התחל משחק!'),
+                    child: const Text(S.startGame),
                   ),
                 ],
               ),
