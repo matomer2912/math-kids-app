@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Career Decision Cockpit — Tomer</title>
+<style>
+  :root{
+    --navy-950:#0b0f1e;
+    --navy-900:#121a30;
+    --navy-800:#1a2440;
+    --navy-700:#243157;
+    --ink:#e9edf7;
+    --ink-dim:#aab4d1;
+    --ink-faint:#7783a6;
+    --paper:#ffffff;
+    --paper-dim:#f4f6fb;
+    --line:#e3e7f2;
+    --line-soft:#eef1f8;
+    --job:#0f9d8f;
+    --job-dark:#0b7669;
+    --job-soft:#e3faf6;
+    --anim:#e2792f;
+    --anim-dark:#b85c1c;
+    --anim-soft:#fdf1e6;
+    --savings-line:#3f6df0;
+    --reserve-line:#9b5de5;
+    --danger:#e0455a;
+    --danger-soft:#fdeaec;
+    --amber:#e0a12f;
+    --amber-soft:#fdf5e4;
+    --safe:#1a9c6b;
+    --safe-soft:#e6f7ef;
+    --radius-lg:20px;
+    --radius-md:14px;
+    --radius-sm:9px;
+    --shadow-1: 0 1px 2px rgba(18,26,48,.06), 0 8px 24px -12px rgba(18,26,48,.18);
+    --shadow-2: 0 2px 6px rgba(18,26,48,.10), 0 20px 48px -18px rgba(18,26,48,.28);
+    font-size: 16px;
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background: var(--paper-dim);
+    color: var(--navy-900);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{ font-weight:700; letter-spacing:-0.01em; margin:0; color:var(--navy-950);}
+  p{margin:0;}
+  a{color:var(--savings-line);}
+  a:hover{color:var(--navy-950);}
+  .container{ max-width:1180px; margin:0 auto; padding:0 clamp(16px,4vw,40px);}
+  ::selection{ background: #cfe0ff; }
+
+  /* ---------- Sticky nav ---------- */
+  .topnav{
+    position:sticky; top:0; z-index:50;
+    background: rgba(11,15,30,.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .topnav-inner{
+    max-width:1180px; margin:0 auto; padding: 10px clamp(16px,4vw,40px);
+    display:flex; align-items:center; gap:18px; overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .topnav-inner::-webkit-scrollbar{display:none;}
+  .brand{ color:#fff; font-weight:800; font-size:.92rem; white-space:nowrap; margin-right:auto; letter-spacing:-.01em;}
+  .brand-dot{ color: var(--anim); }
+  .topnav a{
+    color: var(--ink-dim); text-decoration:none; font-size:.85rem; font-weight:600;
+    white-space:nowrap; padding:6px 2px; border-bottom:2px solid transparent;
+  }
+  .topnav a:hover{ color:#fff; }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    background:
+      radial-gradient(1100px 480px at 15% -10%, rgba(63,109,240,.35), transparent 60%),
+      radial-gradient(900px 420px at 100% 0%, rgba(226,121,47,.25), transparent 55%),
+      linear-gradient(180deg, var(--navy-950), var(--navy-900));
+    color:#fff;
+    padding: clamp(36px,6vw,68px) 0 clamp(30px,5vw,52px);
+  }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.09em;
+    color: var(--ink-dim); background: rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12);
+    padding:5px 12px; border-radius:999px; margin-bottom:18px;
+  }
+  .hero h1{
+    font-size: clamp(1.9rem, 4.2vw, 2.9rem);
+    color:#fff; max-width: 16ch;
+  }
+  .hero .sub{
+    margin-top:14px; max-width:62ch; color: var(--ink-dim); font-size: clamp(.98rem,1.6vw,1.08rem);
+  }
+  .barbell-row{
+    margin-top:26px; display:flex; flex-wrap:wrap; gap:12px;
+  }
+  .barbell-chip{
+    flex:1 1 220px; background: rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+    border-radius: var(--radius-md); padding:14px 16px;
+  }
+  .barbell-chip .k{ font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+  .barbell-chip .v{ margin-top:5px; font-size:.86rem; color:var(--ink-dim); }
+  .bc-job .k{ color: #6fe3d3; }
+  .bc-anim .k{ color: #ffb066; }
+  .bc-check .k{ color: #9fb4ff; }
+
+  /* ---------- Sections ---------- */
+  section{ padding: clamp(38px,6vw,66px) 0; scroll-margin-top: 66px; }
+  .section-head{ margin-bottom: clamp(20px,3.4vw,32px); max-width:70ch; }
+  .section-kicker{
+    font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.09em;
+    color: var(--ink-faint); margin-bottom:8px; display:block;
+  }
+  .section-head h2{ font-size: clamp(1.4rem,2.6vw,1.9rem); }
+  .section-head .desc{ margin-top:10px; color:#4a5578; font-size:.98rem; }
+
+  .card{
+    background: var(--paper); border:1px solid var(--line); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* ---------- Research brief ---------- */
+  .brief-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  @media (max-width: 860px){ .brief-grid{ grid-template-columns:1fr; } }
+  .brief-card{ padding: clamp(20px,3vw,28px); }
+  .brief-card h3{ font-size:1.08rem; display:flex; align-items:center; gap:10px; }
+  .brief-icon{
+    width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-size:1.1rem; flex:none;
+  }
+  .brief-job .brief-icon{ background: var(--job-soft); }
+  .brief-anim .brief-icon{ background: var(--anim-soft); }
+  .brief-card ul{ margin:16px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:14px;}
+  .brief-card li{ font-size:.92rem; color:#33395a; padding-left:16px; position:relative; }
+  .brief-card li::before{
+    content:""; position:absolute; left:0; top:.5em; width:6px; height:6px; border-radius:50%;
+  }
+  .brief-job li::before{ background: var(--job); }
+  .brief-anim li::before{ background: var(--anim); }
+  .brief-card li b{ color: var(--navy-950); }
+  .brief-card li .src{ font-size:.78rem; margin-left:4px; white-space:nowrap; }
+  .caveat{
+    margin-top:18px; padding:12px 14px; border-radius: var(--radius-sm);
+    background: var(--amber-soft); border:1px solid #f1e0b3; font-size:.83rem; color:#6b4f10;
+  }
+  .caveat b{ color:#4a3708; }
+
+  /* ---------- Simulator ---------- */
+  .sim-shell{ display:grid; grid-template-columns: 320px 1fr; gap:22px; align-items:start; }
+  @media (max-width: 900px){ .sim-shell{ grid-template-columns: 1fr; } }
+  .sim-controls{ padding:22px; display:flex; flex-direction:column; gap:18px; position:sticky; top:64px; }
+  @media (max-width: 900px){ .sim-controls{ position:static; } }
+  .field label{ display:block; font-size:.78rem; font-weight:700; color: var(--navy-900); margin-bottom:6px; }
+  .field .hint{ display:block; font-weight:400; color: var(--ink-faint); font-size:.74rem; margin-top:2px; }
+  .field input[type=number]{
+    width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--line);
+    font-size:.95rem; font-family:inherit; color:var(--navy-950); background:#fff;
+  }
+  .field input[type=number]:focus{ outline:2px solid #c6d5ff; border-color:var(--savings-line); }
+  .field-prefix{ position:relative; }
+  .field-prefix span{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-faint); font-size:.9rem; }
+  .field-prefix input{ padding-left:26px; }
+  .slider-row{ display:flex; align-items:baseline; justify-content:space-between; }
+  .slider-val{ font-size:.95rem; font-weight:800; color: var(--savings-line); }
+  input[type=range]{
+    width:100%; margin-top:10px; accent-color: var(--savings-line); height:22px;
+  }
+  .verdict-box{
+    padding:16px 16px; border-radius: var(--radius-md); border:1.5px solid; font-size:.88rem;
+  }
+  .verdict-box .vt{ font-weight:800; font-size:.98rem; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+  .v-safe{ background: var(--safe-soft); border-color:#b7e4cd; color:#0d5c3d; }
+  .v-tight{ background: var(--amber-soft); border-color:#f1e0b3; color:#6b4f10; }
+  .v-danger{ background: var(--danger-soft); border-color:#f3c2c9; color:#8c1a29; }
+
+  .sim-chart{ padding: clamp(16px,3vw,26px); }
+  .stat-row{ display:grid; grid-template-columns: repeat(4,1fr); gap:10px; margin-bottom:18px; }
+  @media (max-width:640px){ .stat-row{ grid-template-columns: repeat(2,1fr);} }
+  .stat-tile{ background: var(--paper-dim); border:1px solid var(--line-soft); border-radius: var(--radius-sm); padding:12px 12px; }
+  .stat-tile .k{ font-size:.68rem; text-transform:uppercase; font-weight:800; letter-spacing:.06em; color:var(--ink-faint); }
+  .stat-tile .v{ font-size:1.12rem; font-weight:800; margin-top:3px; color:var(--navy-950); }
+  .chart-wrap{ width:100%; }
+  .chart-wrap svg{ width:100%; height:auto; display:block; }
+  .legend{ display:flex; flex-wrap:wrap; gap:16px; margin-top:12px; font-size:.8rem; color:#4a5578; }
+  .legend .li{ display:flex; align-items:center; gap:7px; }
+  .legend .sw{ width:14px; height:4px; border-radius:2px; display:inline-block; }
+
+  /* ---------- Plan ---------- */
+  .plan-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:900px){ .plan-grid{ grid-template-columns:1fr; } }
+  .track{ padding: clamp(18px,3vw,24px); border-top:5px solid; }
+  .track-job{ border-color: var(--job); }
+  .track-anim{ border-color: var(--anim); }
+  .track-head{ display:flex; align-items:center; gap:12px; margin-bottom:6px;}
+  .track-badge{ font-size:1.3rem; }
+  .track h3{ font-size:1.15rem; }
+  .track .tagline{ font-size:.85rem; color:var(--ink-faint); margin-top:2px; }
+  .one-percent{
+    margin-top:16px; padding:14px 16px; border-radius: var(--radius-md); font-size:.88rem;
+  }
+  .track-job .one-percent{ background: var(--job-soft); color:#0b4a42; }
+  .track-anim .one-percent{ background: var(--anim-soft); color:#6b3a12; }
+  .one-percent .lbl{ font-weight:800; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:4px;}
+  .tiers{ margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+  .tier{ border:1px solid var(--line); border-radius: var(--radius-md); padding:12px 14px; }
+  .tier-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .tier-name{ font-weight:800; font-size:.82rem; }
+  .tier-time{ font-size:.72rem; color:var(--ink-faint); font-weight:700; background:var(--paper-dim); padding:2px 8px; border-radius:999px; }
+  .tier-desc{ font-size:.85rem; color:#3c4260; margin-top:6px; }
+  .track-job .tier1{ border-left:4px solid #bfe9e1; }
+  .track-job .tier2{ border-left:4px solid #6fcabb; }
+  .track-job .tier3{ border-left:4px solid var(--job); }
+  .track-anim .tier1{ border-left:4px solid #f7cda2; }
+  .track-anim .tier2{ border-left:4px solid #ef9d5b; }
+  .track-anim .tier3{ border-left:4px solid var(--anim); }
+  .checkpoint{
+    margin-top: 22px; padding:16px 18px; border-radius: var(--radius-md);
+    background: var(--navy-950); color:#fff; display:flex; gap:14px; align-items:flex-start;
+  }
+  .checkpoint .ic{ font-size:1.3rem; }
+  .checkpoint h4{ color:#fff; font-size:.95rem; }
+  .checkpoint p{ color: var(--ink-dim); font-size:.85rem; margin-top:4px; }
+
+  /* ---------- Streak ---------- */
+  .streak-shell{ padding: clamp(20px,3vw,28px); }
+  .streak-top{ display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .streak-stats{ display:flex; gap:20px; flex-wrap:wrap; }
+  .streak-stat .k{ font-size:.68rem; text-transform:uppercase; font-weight:800; letter-spacing:.06em; color:var(--ink-faint); }
+  .streak-stat .v{ font-size:1.5rem; font-weight:800; color:var(--navy-950); }
+  .streak-stat .v.flame{ color: var(--anim); }
+  .streak-actions button{
+    border:1.5px solid var(--line); background:#fff; padding:8px 14px; border-radius:10px;
+    font-size:.82rem; font-weight:700; color:var(--navy-900); cursor:pointer;
+  }
+  .streak-actions button:hover{ border-color: var(--savings-line); color: var(--savings-line); }
+  .day-grid{
+    display:grid; grid-template-columns: repeat(10, 1fr); gap:8px;
+  }
+  @media (max-width:640px){ .day-grid{ grid-template-columns: repeat(6,1fr); } }
+  @media (max-width:400px){ .day-grid{ grid-template-columns: repeat(5,1fr); } }
+  .day-cell{
+    aspect-ratio:1/1; border-radius:10px; border:1.5px solid var(--line);
+    background: var(--paper-dim); display:flex; align-items:center; justify-content:center;
+    font-size:.78rem; font-weight:700; color: var(--ink-faint); cursor:pointer;
+    transition: transform .12s ease, background .15s ease, border-color .15s ease, color .15s ease;
+    user-select:none; -webkit-tap-highlight-color: transparent;
+  }
+  .day-cell:hover{ transform: translateY(-2px); border-color:#c6d5ff; }
+  .day-cell:active{ transform: translateY(0) scale(.94); }
+  .day-cell.done{
+    background: linear-gradient(135deg, var(--job), var(--savings-line));
+    border-color: transparent; color:#fff;
+  }
+  .day-cell.chain-broken.done{
+    background: linear-gradient(135deg, #b7bdd6, #8a92b8);
+  }
+  .streak-note{ margin-top:16px; font-size:.78rem; color:var(--ink-faint); }
+
+  /* ---------- Footer ---------- */
+  footer{ padding: 34px 0 60px; }
+  footer .card{ padding: 20px 24px; font-size:.82rem; color:#4a5578; }
+  footer .card b{ color:var(--navy-950); }
+
+  .pill{ display:inline-block; font-size:.68rem; font-weight:800; padding:2px 8px; border-radius:999px; letter-spacing:.04em; }
+  .pill-job{ background: var(--job-soft); color: var(--job-dark); }
+  .pill-anim{ background: var(--anim-soft); color: var(--anim-dark); }
+
+  @media (max-width: 480px){
+    .stat-row{ gap:8px; }
+    .stat-tile .v{ font-size:1rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <span class="brand">Career Decision Cockpit<span class="brand-dot">.</span></span>
+    <a href="#brief">Brief</a>
+    <a href="#simulator">Runway</a>
+    <a href="#plan">Action Plan</a>
+    <a href="#streak">Streak</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <span class="eyebrow">Personal decision brief · Tomer · Aug 2026</span>
+    <h1>Secure design income now, seed the dream series on the side.</h1>
+    <p class="sub">
+      A Google recruiter is chasing you and you'd pursue several senior product/UX roles in parallel.
+      The dream animated series is unproven — no audience, no concept yet, years from income.
+      This cockpit lays out the numbers, the runway, and a daily system so the decision isn't made on vibes.
+    </p>
+    <div class="barbell-row">
+      <div class="barbell-chip bc-job">
+        <span class="k">Barbell, side A</span>
+        <span class="v">Run the job search hard — Google + several senior roles in parallel. This is the income floor.</span>
+      </div>
+      <div class="barbell-chip bc-anim">
+        <span class="k">Barbell, side B</span>
+        <span class="v">Seed the animation cheaply in parallel — no big bets, just daily proof-of-concept reps.</span>
+      </div>
+      <div class="barbell-chip bc-check">
+        <span class="k">Re-decide point</span>
+        <span class="v">Month 6 checkpoint: look at the evidence from both tracks and re-allocate time/money deliberately.</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ RESEARCH BRIEF ============ -->
+  <section id="brief">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-kicker">01 · The Numbers</span>
+        <h2>What the market actually pays, and what indie animation actually costs</h2>
+        <p class="desc">Live-researched, August 2026. Every figure below links to its source — check them yourself before making a six-figure decision on a stranger's webpage.</p>
+      </div>
+
+      <div class="brief-grid">
+        <div class="card brief-card brief-job">
+          <h3><span class="brief-icon">💼</span> Senior UX / Product Design hiring</h3>
+          <ul>
+            <li><b>Google L5 Product Designer total comp: ~$360K median</b> in the US (base ~$198K + stock ~$125K + bonus ~$37K); global median ~$370K.
+              <span class="src">— <a href="https://www.levels.fyi/companies/google/salaries/product-designer/levels/l5/locations/united-states" target="_blank" rel="noopener">Levels.fyi, Google L5 PD (US)</a></span>
+            </li>
+            <li><b>Broad market for senior designers is much lower and wider:</b> average total comp ~$137.8K (Built In), with FAANG-tier senior roles landing ~$165K–$280K total comp. Mid-to-senior <b>base</b> budgets generally run <b>$100K–$185K</b>.
+              <span class="src">— <a href="https://builtin.com/salaries/us/senior-ux-designer" target="_blank" rel="noopener">Built In</a>, <a href="https://uxcel.com/blog/product-designer-salary-guide-2026-what-the-market-is-really-paying" target="_blank" rel="noopener">Uxcel 2026 guide</a></span>
+            </li>
+            <li><b>Demand is tilting senior, not junior:</b> 56% of hiring managers report rising demand for senior designers vs. 25% for juniors; senior hires at large companies reportedly up sharply this cycle.
+              <span class="src">— <a href="https://www.thefountaininstitute.com/blog/senior-product-designers-hired" target="_blank" rel="noopener">The Fountain Institute</a></span>
+            </li>
+            <li><b>82% of design leaders</b> say headcount need has increased or held steady, many citing 10–25% growth — but hiring is selective, not a repeat of the 2020–21 boom.
+              <span class="src">— <a href="https://www.figma.com/blog/why-demand-for-designers-is-on-the-rise/" target="_blank" rel="noopener">Figma Blog</a></span>
+            </li>
+            <li><b>Timeline: budget 2–3 months</b> from first application to signed offer in a competitive, senior-weighted market — this is not a two-week process.
+              <span class="src">— <a href="https://www.productleadership.com/blog/product-hiring-market-trends/" target="_blank" rel="noopener">Product Leadership</a></span>
+            </li>
+            <li>Employers are filtering hard for designers who can <b>use AI in their workflow and speak to product strategy</b>, not just execute UI — worth foregrounding in interviews with Google and peers.
+              <span class="src">— <a href="https://uxcel.com/blog/product-designer-salary-guide-2026-what-the-market-is-really-paying" target="_blank" rel="noopener">Uxcel 2026 guide</a></span>
+            </li>
+          </ul>
+          <div class="caveat"><b>Read:</b> Google L5 is near the top of the market, not the median — treat it as a ceiling to negotiate toward, and run 3–5 parallel processes since the realistic outcome is closer to $150–280K total comp than $360K.</div>
+        </div>
+
+        <div class="card brief-card brief-anim">
+          <h3><span class="brief-icon">🎬</span> Indie animation: cost & path to income</h3>
+          <ul>
+            <li><b>2D character animation runs ~$2,500–$25,000 per finished minute</b> at professional/freelance rates; simple motion graphics is cheaper (~$1,500–$4,000/min). A 3–5 minute pilot at indie-freelance rates is plausibly <b>$10K–$60K</b> if you're paying others — near-$0 if you make it yourself, slowly.
+              <span class="src">— <a href="https://www.yumyumvideos.com/blog/how-much-does-animation-cost-per-minute-of-video/" target="_blank" rel="noopener">YumYum Videos, 2026 pricing</a></span>
+            </li>
+            <li><b>TV-anime-grade episodes cost ~$160K–$320K for 24 minutes</b> (~$6.7K–13.3K/min) at a professional studio — a useful ceiling reference for what "series, professionally made" actually costs.
+              <span class="src">— <a href="https://magicmotionstudio.com/how-much-does-anime-animation-cost/" target="_blank" rel="noopener">Magic Motion Studio</a></span>
+            </li>
+            <li><b>YouTube monetization today needs 1,000 subscribers + 4,000 watch hours/12mo</b> (or 1,000 subs + 10M Shorts views/90 days) — and the bar is <b>rising to 8,000 watch hours from Feb 2027</b>, so the window to qualify under current rules is closing.
+              <span class="src">— <a href="https://support.google.com/youtube/answer/72851" target="_blank" rel="noopener">YouTube Help (official)</a>, <a href="https://techcrunch.com/2026/08/10/youtube-now-requires-creators-to-have-twice-as-many-watch-hours-to-start-earning-money/" target="_blank" rel="noopener">TechCrunch, Aug 2026</a></span>
+            </li>
+            <li><b>Realistic timeline to any income is 6–12+ months of consistent output</b> just to build the audience that makes ads/Patreon/sponsorships viable — this is the "build a portfolio, then convert to income" path most working indie animators describe.
+              <span class="src">— <a href="https://www.bloopanimation.com/making-money-animated-shorts/" target="_blank" rel="noopener">Bloop Animation</a></span>
+            </li>
+            <li><b>Crowdfunding can work</b> — <i>Lackadaisy's</i> pilot raised $330K (vs. an $85K goal) and its Season 1 campaign raised over $2M.
+              <span class="src">— <a href="https://www.syfy.com/syfy-wire/lackadaisy-webcomic-crowdfund-campaign-animated-short-series" target="_blank" rel="noopener">SYFY Wire</a>, <a href="https://www.cartoonbrew.com/crowdfunding/lackadiasy-crowdfunding-campaign-2-million-dollars-231834.html" target="_blank" rel="noopener">Cartoon Brew</a></span>
+            </li>
+          </ul>
+          <div class="caveat"><b>Critical caveat:</b> Lackadaisy crowdfunded on top of a webcomic with a following built over <i>15+ years</i>. Starting from "no audience, no concept" means the honest first milestone isn't funding — it's finishing one small, finished thing and seeing if anyone besides you cares.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SIMULATOR ============ -->
+  <section id="simulator" style="background:var(--paper); border-top:1px solid var(--line); border-bottom:1px solid var(--line);">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-kicker">02 · Runway Simulator</span>
+        <h2>When does the money run out — and when does income need to land?</h2>
+        <p class="desc">Edit these to your real numbers. The barbell assumes burn drops to zero the month income starts — drag the slider to see how much margin that buys you.</p>
+      </div>
+
+      <div class="sim-shell">
+        <div class="card sim-controls">
+          <div class="field field-prefix">
+            <label for="in-savings">Current savings<span class="hint">Liquid cash you'd spend down first</span></label>
+            <span>$</span>
+            <input type="number" id="in-savings" value="48000" min="0" step="500">
+          </div>
+          <div class="field field-prefix">
+            <label for="in-burn">Monthly burn<span class="hint">All-in monthly cost of living</span></label>
+            <span>$</span>
+            <input type="number" id="in-burn" value="6500" min="1" step="100">
+          </div>
+          <div class="field">
+            <label for="in-buffer">Comfortable buffer (months)<span class="hint">Runway you don't want to dip below</span></label>
+            <input type="number" id="in-buffer" value="2" min="0" step="0.5">
+          </div>
+          <div class="field field-prefix">
+            <label for="in-reserve">Reserve — stocks + pension<span class="hint">Last resort, only if savings hit $0</span></label>
+            <span>$</span>
+            <input type="number" id="in-reserve" value="150000" min="0" step="1000">
+          </div>
+          <div class="field">
+            <div class="slider-row">
+              <label for="in-income" style="margin-bottom:0;">Income starts (month)</label>
+              <span class="slider-val" id="income-val">Month 4</span>
+            </div>
+            <input type="range" id="in-income" min="0" max="24" step="1" value="4">
+          </div>
+          <div class="verdict-box" id="verdict-box">
+            <div class="vt" id="verdict-title">—</div>
+            <div id="verdict-text">—</div>
+          </div>
+        </div>
+
+        <div class="card sim-chart">
+          <div class="stat-row">
+            <div class="stat-tile"><div class="k">Runway today</div><div class="v" id="stat-runway">—</div></div>
+            <div class="stat-tile"><div class="k">Savings hit $0</div><div class="v" id="stat-zero">—</div></div>
+            <div class="stat-tile"><div class="k">Reserve touched</div><div class="v" id="stat-reserve">—</div></div>
+            <div class="stat-tile"><div class="k">Hard floor (6mo)</div><div class="v" id="stat-floor">—</div></div>
+          </div>
+          <div class="chart-wrap">
+            <svg id="chart" viewBox="0 0 800 400" role="img" aria-label="Runway drawdown chart"></svg>
+          </div>
+          <div class="legend">
+            <span class="li"><span class="sw" style="background:var(--savings-line);"></span> Savings</span>
+            <span class="li"><span class="sw" style="background:var(--reserve-line);"></span> Reserve (stocks + pension)</span>
+            <span class="li"><span class="sw" style="background:var(--amber); opacity:.7;"></span> Comfort buffer line</span>
+            <span class="li"><span class="sw" style="background:var(--danger); opacity:.7;"></span> Hard floor (6 mo of burn)</span>
+            <span class="li"><span class="sw" style="background:var(--safe);"></span> Income starts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLAN ============ -->
+  <section id="plan">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-kicker">03 · The Two-Track Plan</span>
+        <h2>Daily 1% wins, tiered for whatever kind of day you're having</h2>
+        <p class="desc">Every day, do the 1% action on both tracks at minimum. On good-energy days, move up a tier. The point isn't intensity — it's that the chain never breaks.</p>
+      </div>
+
+      <div class="plan-grid">
+        <div class="card track track-job">
+          <div class="track-head">
+            <span class="track-badge">💼</span>
+            <div>
+              <h3>Track A — Secure Income <span class="pill pill-job">Primary</span></h3>
+              <p class="tagline">Google + several senior roles, run in parallel</p>
+            </div>
+          </div>
+          <div class="one-percent">
+            <span class="lbl">Daily 1% (non-negotiable)</span>
+            One outbound touch — reply to the recruiter, ping one contact, or save one role to apply to. Never zero days.
+          </div>
+          <div class="tiers">
+            <div class="tier tier1">
+              <div class="tier-top"><span class="tier-name">Tier 1 — Low energy</span><span class="tier-time">~15 min</span></div>
+              <div class="tier-desc">Answer recruiter messages, tidy one resume bullet, or skim 3 job postings and shortlist one.</div>
+            </div>
+            <div class="tier tier2">
+              <div class="tier-top"><span class="tier-name">Tier 2 — Normal day</span><span class="tier-time">~45–60 min</span></div>
+              <div class="tier-desc">Submit one tailored application, or tighten one portfolio case study, or do one round of interview-question drilling.</div>
+            </div>
+            <div class="tier tier3">
+              <div class="tier-top"><span class="tier-name">Tier 3 — Full send</span><span class="tier-time">2+ hrs</span></div>
+              <div class="tier-desc">Mock interview loop (portfolio review + behavioral + a design exercise), or a deep case-study rebuild, or an informational interview with someone at a target company.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card track track-anim">
+          <div class="track-head">
+            <span class="track-badge">🎬</span>
+            <div>
+              <h3>Track B — Seed the Animation <span class="pill pill-anim">Cheap bet</span></h3>
+              <p class="tagline">No budget, no deadline pressure — just proof of concept</p>
+            </div>
+          </div>
+          <div class="one-percent">
+            <span class="lbl">Daily 1% (non-negotiable)</span>
+            5 minutes of hands-on creative work — one sketch, one line of dialogue, one voice memo of an idea. Momentum over output.
+          </div>
+          <div class="tiers">
+            <div class="tier tier1">
+              <div class="tier-top"><span class="tier-name">Tier 1 — Low energy</span><span class="tier-time">~15 min</span></div>
+              <div class="tier-desc">One character sketch, one beat added to the outline, or 10 minutes of reference-watching with notes.</div>
+            </div>
+            <div class="tier tier2">
+              <div class="tier-top"><span class="tier-name">Tier 2 — Normal day</span><span class="tier-time">~45–60 min</span></div>
+              <div class="tier-desc">Storyboard one scene, write one full page of script, or block out one shot in animation software.</div>
+            </div>
+            <div class="tier tier3">
+              <div class="tier-top"><span class="tier-name">Tier 3 — Full send</span><span class="tier-time">2+ hrs</span></div>
+              <div class="tier-desc">Finish one short animated test clip (10–15 sec) or complete a full pass of the pilot outline — something concrete enough to show someone else.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="checkpoint">
+        <span class="ic">🚦</span>
+        <div>
+          <h4>Month 6 checkpoint — hard floor, not a suggestion</h4>
+          <p>By month 6 you'll have either landed a role (re-evaluate how much runway/energy goes to animation) or you'll be touching the reserve (re-evaluate everything, including whether the job search needs to widen). Either way, look at the evidence — applications sent, offers, finished animation minutes, any external interest — and re-decide on purpose instead of drifting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STREAK ============ -->
+  <section id="streak" style="background:var(--paper); border-top:1px solid var(--line);">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-kicker">04 · Don't Break the Chain</span>
+        <h2>30-day streak tracker</h2>
+        <p class="desc">Tap a day once you've done at least the 1% on both tracks. This demo is in-memory only — nothing is saved, so it resets if you reload. Print a real one, or rebuild this with storage, once you're using it for real.</p>
+      </div>
+
+      <div class="card streak-shell">
+        <div class="streak-top">
+          <div class="streak-stats">
+            <div class="streak-stat">
+              <div class="k">Current streak</div>
+              <div class="v flame" id="streak-current">0 days</div>
+            </div>
+            <div class="streak-stat">
+              <div class="k">Days completed</div>
+              <div class="v" id="streak-total">0 / 30</div>
+            </div>
+          </div>
+          <div class="streak-actions">
+            <button type="button" id="streak-reset">Reset grid</button>
+          </div>
+        </div>
+        <div class="day-grid" id="day-grid" role="group" aria-label="30 day streak grid"></div>
+        <p class="streak-note">Current streak counts consecutive completed days starting from Day 1 — the first gap breaks the chain, same as the classic method. Days after a break still stay clickable, they just don't count toward the streak.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <div class="card">
+      <b>Not financial advice.</b> This is a personal planning tool with placeholder numbers — edit every field in the simulator to match your real savings, burn, and reserves before trusting any verdict on this page. Research figures are sourced from public reporting as of August 2026; comp and cost figures vary widely by company, location, and negotiation. Verify anything load-bearing yourself.
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ RUNWAY SIMULATOR ============ */
+  var HORIZON = 24; // months shown on chart
+  var HARD_FLOOR_MONTHS = 6;
+
+  var elSavings = document.getElementById('in-savings');
+  var elBurn = document.getElementById('in-burn');
+  var elBuffer = document.getElementById('in-buffer');
+  var elReserve = document.getElementById('in-reserve');
+  var elIncome = document.getElementById('in-income');
+  var elIncomeVal = document.getElementById('income-val');
+
+  var svg = document.getElementById('chart');
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  function num(el, fallback){
+    var v = parseFloat(el.value);
+    return isFinite(v) ? v : fallback;
+  }
+
+  function fmtMoney(v){
+    v = Math.round(v);
+    var abs = Math.abs(v);
+    var sign = v < 0 ? '-' : '';
+    if (abs >= 1000){
+      return sign + '$' + (abs/1000).toFixed(abs >= 10000 ? 0 : 1) + 'k';
+    }
+    return sign + '$' + abs;
+  }
+
+  function niceStep(maxVal, targetTicks){
+    var raw = maxVal / targetTicks;
+    var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var norm = raw / mag;
+    var step;
+    if (norm < 1.5) step = 1;
+    else if (norm < 3) step = 2;
+    else if (norm < 7) step = 5;
+    else step = 10;
+    return step * mag;
+  }
+
+  function simulate(savings0, burn, reserve0, incomeMonth){
+    var savings = savings0, reserve = reserve0;
+    var savingsSeries = [savings0];
+    var reserveSeries = [reserve0];
+    var zeroMonth = null, reserveDipMonth = null, reserveDepletedMonth = null;
+
+    for (var m = 1; m <= HORIZON; m++){
+      var incomeActive = m > incomeMonth;
+      var need = incomeActive ? 0 : burn;
+
+      if (need > 0){
+        if (savings >= need){
+          savings -= need;
+        } else {
+          var shortfall = need - savings;
+          savings = 0;
+          if (zeroMonth === null) zeroMonth = m;
+          if (shortfall > 0 && reserveDipMonth === null) reserveDipMonth = m;
+          reserve -= shortfall;
+          if (reserve <= 0){
+            reserve = 0;
+            if (reserveDepletedMonth === null) reserveDepletedMonth = m;
+          }
+        }
+      }
+      savingsSeries.push(savings);
+      reserveSeries.push(reserve);
+    }
+
+    return {
+      savingsSeries: savingsSeries,
+      reserveSeries: reserveSeries,
+      zeroMonth: zeroMonth,
+      reserveDipMonth: reserveDipMonth,
+      reserveDepletedMonth: reserveDepletedMonth
+    };
+  }
+
+  function setVerdict(status, title, text){
+    var box = document.getElementById('verdict-box');
+    box.className = 'verdict-box v-' + status;
+    document.getElementById('verdict-title').textContent = title;
+    document.getElementById('verdict-text').textContent = text;
+  }
+
+  function clearSvg(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function el(tag, attrs){
+    var node = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs){
+      if (Object.prototype.hasOwnProperty.call(attrs, k)) node.setAttribute(k, attrs[k]);
+    }
+    return node;
+  }
+
+  function draw(){
+    var savings0 = Math.max(0, num(elSavings, 0));
+    var burn = Math.max(1, num(elBurn, 1));
+    var bufferMonths = Math.max(0, num(elBuffer, 0));
+    var reserve0 = Math.max(0, num(elReserve, 0));
+    var incomeMonth = Math.max(0, Math.min(HORIZON, num(elIncome, 0)));
+
+    elIncomeVal.textContent = incomeMonth === 0 ? 'Month 0 (now)' : 'Month ' + incomeMonth;
+
+    var sim = simulate(savings0, burn, reserve0, incomeMonth);
+
+    // ---- stats ----
+    var runwayMonths = burn > 0 ? (savings0 / burn) : 0;
+    document.getElementById('stat-runway').textContent = runwayMonths.toFixed(1) + ' mo';
+    document.getElementById('stat-zero').textContent = sim.zeroMonth === null ? 'Never' : ('Month ' + sim.zeroMonth);
+    document.getElementById('stat-reserve').textContent = sim.reserveDipMonth === null ? 'Not needed' : ('Month ' + sim.reserveDipMonth);
+    document.getElementById('stat-floor').textContent = fmtMoney(burn * HARD_FLOOR_MONTHS);
+
+    // ---- verdict ----
+    if (sim.reserveDepletedMonth !== null){
+      setVerdict('danger', '⚠ Danger — reserves run out',
+        'At these numbers, savings hit $0 in month ' + sim.zeroMonth + ' and the reserve is fully drained by month ' + sim.reserveDepletedMonth + ', before income covers burn in month ' + incomeMonth + '. Either land income sooner, cut burn, or this plan doesn’t survive.');
+    } else if (sim.reserveDipMonth !== null){
+      var dipLen = incomeMonth - sim.reserveDipMonth;
+      setVerdict('tight', '◐ Tight — dips into reserves',
+        'Savings run out in month ' + sim.zeroMonth + ', ' + dipLen + ' month(s) before income starts in month ' + incomeMonth + '. You’ll draw on stocks/pension for that gap, but won’t deplete them at these numbers. Survivable, not comfortable.');
+    } else {
+      var comfortThresholdMonths = bufferMonths;
+      var comfortDollar = burn * comfortThresholdMonths;
+      var minSavingsBeforeIncome = Math.min.apply(null, sim.savingsSeries.slice(0, incomeMonth + 1));
+      if (minSavingsBeforeIncome < comfortDollar){
+        setVerdict('tight', '◐ Inside comfort buffer',
+          'Savings never hit $0, but they dip below your ' + comfortThresholdMonths + '-month comfort buffer before income starts in month ' + incomeMonth + '. Reserves stay untouched — this is workable but tighter than you’d like.');
+      } else {
+        setVerdict('safe', '✓ Safe — comfort buffer holds',
+          'At these numbers, savings never drop below your ' + comfortThresholdMonths + '-month comfort buffer before income starts in month ' + incomeMonth + '. Reserves stay untouched. This is the barbell working as intended.');
+      }
+    }
+
+    renderChart(sim, burn, bufferMonths, incomeMonth, savings0, reserve0);
+  }
+
+  function renderChart(sim, burn, bufferMonths, incomeMonth, savings0, reserve0){
+    clearSvg();
+
+    var W = 800, H = 400;
+    var padL = 62, padR = 20, padT = 20, padB = 40;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    var comfortDollar = burn * bufferMonths;
+    var hardFloorDollar = burn * HARD_FLOOR_MONTHS;
+    var maxSeries = Math.max(savings0, reserve0, comfortDollar, hardFloorDollar, 1);
+    var step = niceStep(maxSeries, 5);
+    var yMax = Math.ceil((maxSeries * 1.08) / step) * step;
+    if (yMax <= 0) yMax = step;
+
+    function x(m){ return padL + (m / HORIZON) * plotW; }
+    function y(v){ return padT + plotH - (v / yMax) * plotH; }
+
+    // background
+    svg.appendChild(el('rect', {x:0, y:0, width:W, height:H, fill:'#ffffff'}));
+
+    // gridlines + y labels
+    var ticks = Math.round(yMax / step);
+    for (var i = 0; i <= ticks; i++){
+      var val = i * step;
+      var gy = y(val);
+      svg.appendChild(el('line', {x1:padL, y1:gy, x2:W - padR, y2:gy, stroke:'#eef1f8', 'stroke-width':1}));
+      var lbl = el('text', {x:padL - 10, y:gy + 4, 'text-anchor':'end', 'font-size':11, fill:'#7783a6', 'font-family':'inherit'});
+      lbl.textContent = fmtMoney(val);
+      svg.appendChild(lbl);
+    }
+
+    // x labels every 3 months
+    for (var m = 0; m <= HORIZON; m += 3){
+      var gx = x(m);
+      svg.appendChild(el('line', {x1:gx, y1:padT, x2:gx, y2:H - padB, stroke:'#f5f6fb', 'stroke-width':1}));
+      var xlbl = el('text', {x:gx, y:H - padB + 18, 'text-anchor':'middle', 'font-size':11, fill:'#7783a6', 'font-family':'inherit'});
+      xlbl.textContent = 'M' + m;
+      svg.appendChild(xlbl);
+    }
+
+    // comfort buffer reference line
+    if (comfortDollar > 0 && comfortDollar <= yMax){
+      var cy = y(comfortDollar);
+      svg.appendChild(el('line', {x1:padL, y1:cy, x2:W - padR, y2:cy, stroke:'#e0a12f', 'stroke-width':1.5, 'stroke-dasharray':'5,4', opacity:0.85}));
+    }
+
+    // hard floor reference line
+    if (hardFloorDollar > 0 && hardFloorDollar <= yMax){
+      var hy = y(hardFloorDollar);
+      svg.appendChild(el('line', {x1:padL, y1:hy, x2:W - padR, y2:hy, stroke:'#e0455a', 'stroke-width':1.5, 'stroke-dasharray':'2,4', opacity:0.75}));
+    }
+
+    // income-start vertical marker
+    var ix = x(incomeMonth);
+    svg.appendChild(el('line', {x1:ix, y1:padT, x2:ix, y2:H - padB, stroke:'#1a9c6b', 'stroke-width':2, 'stroke-dasharray':'4,3'}));
+    var ilbl = el('text', {x:ix, y:padT - 6, 'text-anchor': incomeMonth > HORIZON - 3 ? 'end' : 'middle', 'font-size':11, 'font-weight':'700', fill:'#1a9c6b', 'font-family':'inherit'});
+    ilbl.textContent = 'Income starts';
+    svg.appendChild(ilbl);
+
+    // reserve line
+    var reservePath = sim.reserveSeries.map(function(v, mi){ return (mi === 0 ? 'M' : 'L') + x(mi).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ');
+    svg.appendChild(el('path', {d:reservePath, fill:'none', stroke:'#9b5de5', 'stroke-width':2.5, 'stroke-dasharray':'6,4', 'stroke-linecap':'round'}));
+
+    // savings line
+    var savingsPath = sim.savingsSeries.map(function(v, mi){ return (mi === 0 ? 'M' : 'L') + x(mi).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ');
+    svg.appendChild(el('path', {d:savingsPath, fill:'none', stroke:'#3f6df0', 'stroke-width':3, 'stroke-linecap':'round', 'stroke-linejoin':'round'}));
+
+    // zero-crossing marker
+    if (sim.zeroMonth !== null){
+      var zx = x(sim.zeroMonth), zy = y(0);
+      var dot = el('circle', {cx:zx, cy:zy, r:5, fill:'#e0455a', stroke:'#fff', 'stroke-width':2});
+      svg.appendChild(dot);
+    }
+
+    // axes
+    svg.appendChild(el('line', {x1:padL, y1:H - padB, x2:W - padR, y2:H - padB, stroke:'#cfd4e6', 'stroke-width':1.5}));
+    svg.appendChild(el('line', {x1:padL, y1:padT, x2:padL, y2:H - padB, stroke:'#cfd4e6', 'stroke-width':1.5}));
+  }
+
+  [elSavings, elBurn, elBuffer, elReserve].forEach(function(input){
+    input.addEventListener('input', draw);
+  });
+  elIncome.addEventListener('input', draw);
+
+  draw();
+
+  /* ============ STREAK TRACKER (in-memory only) ============ */
+  var DAYS = 30;
+  var grid = document.getElementById('day-grid');
+  var state = new Array(DAYS).fill(false);
+
+  function buildGrid(){
+    grid.innerHTML = '';
+    for (var i = 0; i < DAYS; i++){
+      var cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'day-cell';
+      cell.textContent = String(i + 1);
+      cell.setAttribute('aria-pressed', 'false');
+      cell.setAttribute('data-index', String(i));
+      cell.addEventListener('click', onDayClick);
+      grid.appendChild(cell);
+    }
+  }
+
+  function onDayClick(e){
+    var idx = parseInt(e.currentTarget.getAttribute('data-index'), 10);
+    state[idx] = !state[idx];
+    updateGrid();
+  }
+
+  function updateGrid(){
+    var cells = grid.querySelectorAll('.day-cell');
+    var currentStreak = 0;
+    var chainBroken = false;
+
+    for (var i = 0; i < DAYS; i++){
+      var cell = cells[i];
+      var done = state[i];
+      cell.classList.toggle('done', done);
+      cell.setAttribute('aria-pressed', done ? 'true' : 'false');
+
+      if (!chainBroken){
+        if (done) currentStreak++;
+        else chainBroken = true;
+      }
+      cell.classList.toggle('chain-broken', chainBroken && done);
+    }
+
+    var totalDone = state.filter(Boolean).length;
+    document.getElementById('streak-current').textContent = currentStreak + (currentStreak === 1 ? ' day' : ' days');
+    document.getElementById('streak-total').textContent = totalDone + ' / ' + DAYS;
+  }
+
+  document.getElementById('streak-reset').addEventListener('click', function(){
+    state = new Array(DAYS).fill(false);
+    updateGrid();
+  });
+
+  buildGrid();
+  updateGrid();
+
+})();
+</script>
+</body>
+</html>
