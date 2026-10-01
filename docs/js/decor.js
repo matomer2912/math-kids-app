@@ -150,8 +150,8 @@ function decorBuilder(out) {
       _dc.setHex(c);
       const wx = _dm2.elements[12], wz = _dm2.elements[14];
       if (o.e) { dwBox(out.glow, _dm2, _dc.r, _dc.g, _dc.b, 0, 0, 0, false); out.stats.glow++; return; }
-      const key = Math.floor(wx / DECOR_CHUNK) * 4096 + Math.floor(wz / DECOR_CHUNK);
-      let W = out.chunks.get(key); if (!W) out.chunks.set(key, W = DWriter());
+      const key = (Math.floor(wx / DECOR_CHUNK) * 4096 + Math.floor(wz / DECOR_CHUNK)) * 2 + (b.cast ? 1 : 0);
+      let W = out.chunks.get(key); if (!W) { out.chunks.set(key, W = DWriter()); W.cast = !!b.cast; }
       dwBox(W, _dm2, _dc.r, _dc.g, _dc.b, o.g === undefined ? 0.18 : o.g, o.sb || 0, o.sw || 0, y <= 0.001 && !o.rx && !o.rz);
       out.stats.boxes++;
     },
@@ -504,6 +504,8 @@ DPROP.grassRing = (b, r, P) => { for (let s = 0; s < 3; s++) { const a = r() * 6
 // sites: edgeN/edgeS/edgeE/edgeW/edge (floor hugging a wall; S = camera side), cornerN/cornerS, floor (room
 // interior), wallTopN/wallTopS/wallTopSide/wallTop (rim wall tops), faceN/faceSide (rim wall faces, origin at
 // the top edge), void (beyond the rim), pitEdge (floor next to a pit), pit (pit surface)
+// props tall enough to cast useful shadows (the rest only receive: keeps the shadow pass cheap)
+const DECOR_CAST = new Set(['tree', 'bush', 'brazier', 'templePillar', 'idolHead', 'brokenPillar', 'ruinPillar', 'sarcophagus', 'tombstone', 'skullPile', 'fence']);
 const DECOR_KITS = {
   crypt: {
     pal: {
@@ -586,11 +588,11 @@ const DECOR_KITS = {
       { p: 'bush', at: 'wallTopSide', d: 0.18, h: 1.2, rad: 0.7, s: [0.6, 0.85] },
       { p: 'fern', at: 'wallTopN', d: 0.25 },
       { p: 'fern', at: 'wallTopSide', d: 0.18 },
-      { p: 'lowFern', at: 'wallTopS', d: 0.25 },
+      { p: 'lowFern', at: 'wallTopS', d: 0.18 },
       { p: 'overgrowth', at: 'wallTop', d: 0.55 },
-      { p: 'grass', at: 'wallTop', d: 0.15 },
+      { p: 'grass', at: 'wallTop', d: 0.1 },
       { p: 'flowers', at: 'wallTop', d: 0.05, h: 0.6 },
-      { p: 'moss', at: 'wallTop', d: 0.25 },
+      { p: 'moss', at: 'wallTop', d: 0.15 },
       { p: 'lowFern', at: 'pitEdge', d: 0.3, in: 0.35 },
       { p: 'lilies', at: 'pit', d: 0.3 },
     ],
@@ -738,7 +740,7 @@ function buildDecor(map, theme, group) {
 
   const put = (name, s, r, sc) => {
     const fn = DPROP[name]; if (!fn) return;
-    B.begin(s.x, s.y, s.z, s.rot, sc); B.H = s.H || 2; B.cs = s.cs || 1; B.r = r;
+    B.begin(s.x, s.y, s.z, s.rot, sc); B.H = s.H || 2; B.cs = s.cs || 1; B.r = r; B.cast = DECOR_CAST.has(name);
     fn(B, r, P);
     out.stats.props++;
   };
@@ -824,7 +826,7 @@ function buildDecor(map, theme, group) {
   for (const W2 of out.chunks.values()) {
     if (!W2.nv) continue;
     const mesh = new THREE.Mesh(dwGeometry(W2, true), M.lit);
-    mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+    mesh.castShadow = W2.cast; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
     dg.add(mesh);
   }
   if (out.glow.nv) { const m = new THREE.Mesh(dwGeometry(out.glow, false), M.glow); m.matrixAutoUpdate = false; dg.add(m); }
