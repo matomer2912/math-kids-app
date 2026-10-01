@@ -8,7 +8,7 @@
   const D = DPROP, pick = dpick, jit = djit;
   const TAU = 6.283;
   // shadow casters (tall props only; the rest only receive)
-  ['skyColumn', 'skyStatue', 'skyBrazier', 'shroomGiant', 'shroomTall', 'shroomStalag', 'pirateLantern', 'pirateMast',
+  ['skyColumn', 'skyStatue', 'skyBrazier', 'pirateLantern', 'pirateMast',
     'pirateCargo', 'pirateCannon', 'pirateAnchor', 'pirateRock'].forEach(n => DECOR_CAST.add(n));
 
   // ======================= Sky Castle =======================
@@ -147,25 +147,27 @@
   };
   // soft cloud tuft (void around the walls, under pit holes)
   D.skyCloud = (b, r, P) => {
-    const n = 4 + Math.floor(r() * 4), s = 1 + r() * 0.6;
-    b.push(0, -r() * 1.6, 0, r() * TAU, s);
-    b.box(P.cloudLo, 2.4, 0.5, 1.7, 0, 0, 0, { g: 0.25 });
+    const n = 5 + Math.floor(r() * 4), s = 0.8 + r() * 0.5;
+    b.push(0, -r() * 1.4, 0, r() * TAU, s);
+    b.box(P.cloudLo, 1.7, 0.34, 1.1, 0, 0, 0, { g: 0.2 });
     for (let k = 0; k < n; k++) {
-      const w = 0.7 + r() * 0.9, x = (r() - 0.5) * 2.0, z = (r() - 0.5) * 1.2, y = 0.3 + r() * 0.35;
-      b.box(k & 1 ? P.cloud : P.cloud2, w, w * (0.55 + r() * 0.3), w * (0.8 + r() * 0.3), x, y, z, { ry: r() * 0.5, g: 0.2 });
+      const w = 0.45 + r() * 0.6, x = (r() - 0.5) * 2.2, z = (r() - 0.5) * 1.1, y = 0.18 + r() * 0.3 - Math.abs(x) * 0.12;
+      b.box(k & 1 ? P.cloud : P.cloud2, w, w * (0.5 + r() * 0.3), w * (0.8 + r() * 0.3), x, y, z, { ry: r() * 0.6, g: 0.22 });
     }
+    b.glow(2, 0, 0.35, 0.2, 4.2, 2.6, P.cloud, 0.22, 0);
+    b.glow(2, (r() - 0.5) * 1.5, 0.2, 0.3, 2.6, 1.8, P.cloud, 0.18, 0);
     b.pop();
   };
   D.skyPitCloud = (b, r, P) => { b.push(0, 25.5 + r() * 1.5, 0, 0, 0.8 + r() * 0.4); D.skyCloud(b, r, P); b.pop(); };
   // floating rock island in the sky beyond the walls
   D.skyIsland = (b, r, P) => {
-    const s = 0.7 + r() * 0.7;
-    b.push(0, -1.6 - r() * 3.2, 0, r() * TAU, s);
+    const s = 0.5 + r() * 0.45;
+    b.push(0, -3.2 - r() * 3.5, 0, r() * TAU, s);
     const rk = jit(P.rock, r, 0.06);
     const tiers = [[2.4, 0.5], [1.8, 0.5], [1.2, 0.55], [0.6, 0.5]];
     let y = 0;
     tiers.forEach(([w, h], k) => { y -= h; b.box(shade(rk, 1 - k * 0.1), w * (0.9 + r() * 0.2), h, w * (0.85 + r() * 0.2), (r() - 0.5) * 0.3, y, (r() - 0.5) * 0.3, { ry: r() * 0.4, g: 0.15 }); });
-    b.box(jit(P.grass, r, 0.06), 2.5, 0.16, 2.3, 0, 0, 0, { g: 0 });
+    b.box(jit(P.grass, r, 0.06), 2.3, 0.14, 2.1, 0, 0, 0, { g: 0.1 });
     b.box(jit(pick(P.leafDark, r), r, 0.06), 0.9, 0.26, 0.6, 0.6, 0.16, -0.5, { g: 0.2 });
     const what = r();
     if (what < 0.35) {      // little tree
@@ -185,9 +187,22 @@
   };
   // grassy tuft + a few flowers on wall tops (hanging gardens)
   D.skyGarden = (b, r, P) => {
-    const w = 0.7 + r() * 0.7;
-    b.box(jit(pick(P.leafDark, r), r, 0.1), w, 0.12 + r() * 0.12, w * (0.6 + r() * 0.4), (r() - 0.5) * 0.8, 0, (r() - 0.5) * 0.8, { ry: r(), g: 0.3, sw: 0.008 });
-    if (r() < 0.6) { b.push((r() - 0.5) * 0.8, 0.1, (r() - 0.5) * 0.6, r() * 3, 0.8); D.skyFlowers(b, r, P); b.pop(); }
+    const x = (r() - 0.5) * 0.9, z = (r() - 0.5) * 0.9, w = 0.45 + r() * 0.35, lc = jit(pick(P.leafDark, r), r, 0.1);
+    b.box(lc, w, 0.26 + r() * 0.16, w * (0.8 + r() * 0.3), x, 0, z, { ry: r(), g: 0.35, sw: 0.008 });
+    b.box(shade(lc, 1.18), w * 0.6, 0.14, w * 0.55, x + 0.04, 0.3, z - 0.02, { ry: r(), g: 0.1, sw: 0.012, sb: 0.008 });
+    if (r() < 0.7) for (let k = 0; k < 2; k++) b.box(pick(P.flower, r), 0.11, 0.08, 0.11, x + (r() - 0.5) * w * 0.6, 0.38 + r() * 0.06, z + (r() - 0.5) * w * 0.5, { g: 0 });
+  };
+  D.skyIvy = (b, r, P) => {     // ivy + little blossoms hanging down a wall face (origin = top edge)
+    const H = b.H || 2, n = 1 + Math.floor(r() * 3);
+    for (let s = 0; s < n; s++) {
+      const x = (r() - 0.5) * 1.6, len = 0.5 + r() * Math.min(1.3, H - 0.4), seg = Math.max(2, Math.round(len / 0.32));
+      for (let k = 0; k < seg; k++) {
+        const y = -0.02 - (k + 1) * (len / seg), sw = 0.006 + k * 0.01;
+        b.box(P.vine, 0.08, len / seg, 0.05, x + Math.sin(k * 1.3 + s) * 0.04, y, 0.04, { g: 0, sw, sb: sw + 0.01 });
+        b.box(jit(pick(k & 1 ? P.leaf : P.leafDark, r), r, 0.1), 0.26, 0.2, 0.06, x + (k & 1 ? 0.11 : -0.11), y, 0.07, { rz: k & 1 ? -0.4 : 0.4, g: 0, sw: sw + 0.01, sb: sw + 0.01 });
+        if (r() < 0.3) b.box(pick(P.flower, r), 0.09, 0.09, 0.05, x + (k & 1 ? -0.1 : 0.1), y + 0.05, 0.1, { g: 0, sw, sb: sw });
+      }
+    }
   };
   D.skyPetals = (b, r, P) => {   // petals strewn on the floor
     const n = 3 + Math.floor(r() * 4);
@@ -209,17 +224,17 @@
   function shroom(b, r, P, h, cw, x0, z0, floorPool) {
     const [cap, glow, spot] = capOf(P, r), stem = jit(P.stem, r, 0.06), sw = 0.16 + cw * 0.14;
     let x = x0, z = z0, y = 0;
-    const bx = (r() - 0.5) * cw * 0.12, bz = cw * (0.04 + r() * 0.05), seg = h > 1.2 ? 3 : 1;
-    b.box(shade(stem, 0.75), sw * 1.6, Math.min(0.5, h * 0.25), sw * 1.6, x, 0, z, { g: 0.4 });
+    const bx = (r() - 0.5) * cw * 0.12, bz = cw * (0.04 + r() * 0.05), seg = h > 1.2 ? 3 : 1, small = cw < 0.5;
+    if (!small) b.box(shade(stem, 0.75), sw * 1.6, Math.min(0.5, h * 0.25), sw * 1.6, x, 0, z, { g: 0.4 });
     for (let k = 0; k < seg; k++) { const hh = h / seg; b.box(shade(stem, 0.88 + k * 0.07), sw * (1 - k * 0.12), hh + 0.02, sw * (1 - k * 0.12), x, y, z, { g: 0.3 }); x += bx; z += bz; y += hh; }
     b.box(glow, cw * 1.04, 0.08, cw * 1.04, x, y - 0.1, z, { e: 1 });                      // glowing gill rim
     b.box(cap, cw, cw * 0.18, cw, x, y - 0.03, z, { g: 0.35 });
-    b.box(shade(cap, 1.15), cw * 0.72, cw * 0.15, cw * 0.72, x, y - 0.03 + cw * 0.18, z, { g: 0.15 });
-    b.box(shade(cap, 1.3), cw * 0.38, cw * 0.09, cw * 0.38, x, y - 0.03 + cw * 0.33, z, { g: 0 });
-    const ns = cw > 1.2 ? 6 : 3;
+    b.box(shade(cap, 1.12), cw * 0.84, cw * 0.13, cw * 0.84, x, y - 0.03 + cw * 0.18, z, { g: 0.15 });
+    if (!small) b.box(shade(cap, 1.24), cw * 0.56, cw * 0.07, cw * 0.56, x, y - 0.03 + cw * 0.31, z, { g: 0 });
+    const ns = cw > 1.2 ? 6 : small ? 1 : 3;
     for (let s = 0; s < ns; s++) {
-      const a = r() * TAU, inner = s & 1, d = inner ? cw * (0.06 + r() * 0.2) : cw * (0.39 + r() * 0.08), ss = cw * (0.07 + r() * 0.05);
-      b.box(spot, ss, 0.04, ss, x + Math.cos(a) * d, y - 0.03 + cw * (inner ? 0.33 : 0.18), z + Math.sin(a) * d, { e: 1 });
+      const a = r() * TAU, inner = (s & 1) && !small, d = inner ? cw * (0.05 + r() * 0.18) : cw * (0.3 + r() * 0.1), ss = cw * (0.07 + r() * 0.05);
+      b.box(spot, ss, 0.04, ss, x + Math.cos(a) * d, y - 0.03 + cw * (inner ? 0.38 : 0.31), z + Math.sin(a) * d, { e: 1 });
     }
     b.glow(2, x, y + cw * 0.1, z + 0.3, cw * 1.9, cw * 1.4, glow, 0.32, 0.03);
     if (floorPool) b.glow(0, x0, 0.04, z0 + 0.2, cw * 3.2, cw * 3.0, glow, 0.32, 0.03);
@@ -242,7 +257,7 @@
     const n = 2 + Math.floor(r() * 4); let gl = null;
     for (let s = 0; s < n; s++) { const res = shroom(b, r, P, 0.12 + r() * 0.3, 0.18 + r() * 0.2, (r() - 0.5) * 0.7, (r() - 0.5) * 0.5, false); gl = gl || res[3]; }
     b.glow(0, 0, 0.04, 0, 2.6, 2.4, gl, 0.3, 0.03);
-    if (r() < 0.18) b.light(0, 0.8, 0.5, gl, 0.9, 6);
+    if (r() < 0.08) b.light(0, 0.8, 0.5, gl, 0.9, 6);
     if (r() < 0.5) b.mote(2, 0, 0.3, 0, gl, 0.1, 0.5 + r() * 0.5);
   };
   // bracket fungi on a wall face (origin = top edge, +z out of the face)
@@ -501,8 +516,8 @@
     sky: {
       pal: {
         marble: 0xf2ede2, white: 0xffffff, gold: 0xe8b83a, banner: [0x2a4ac0, 0x2450b8, 0x3a5ad8], soil: 0x6a5038,
-        leaf: [0x4f9a3a, 0x5cae44, 0x6ab84a], leafDark: [0x2f6a2c, 0x387a32, 0x2a5e2a], flower: [0xff5a6a, 0xffd03a, 0xffffff, 0xff8ab0, 0x7ab0ff],
-        petal: [0xffb8d0, 0xffffff, 0xffe08a], cloud: 0xffffff, cloud2: 0xf2f6ff, cloudLo: 0xdce6f6, rock: 0x8a7e72, grass: 0x6aa84a, bark: 0x6a4a30,
+        leaf: [0x4a8a3a, 0x569a40, 0x62a648], leafDark: [0x2c5e2c, 0x346a30, 0x284f2a], flower: [0xff5a6a, 0xffd03a, 0xffffff, 0xff8ab0, 0x7ab0ff],
+        petal: [0xffb8d0, 0xffffff, 0xffe08a], cloud: 0xffffff, cloud2: 0xeef3fc, cloudLo: 0xd2dcee, rock: 0x8a7e72, grass: 0x6a9a50, bark: 0x6a4a30,
         crystal: 0x8fe0ff, crystal2: 0xe6faff, ember: 0xffb040, fire: 0xffc040, fire2: 0xfff4c0, vine: 0x3a7a30,
       },
       shafts: { c: 0xfff0c8, i: 0.16, per: 0.45, w: [1.8, 2.8] },
@@ -511,8 +526,8 @@
         { p: 'skyCloud', at: 'void', d: 0.2, sp: 2, y: -0.9, h: 0.5, rad: 1.2 },
         { p: 'skyPitCloud', at: 'pit', d: 0.3, sp: 2 },
         { p: 'skyBanner', at: 'faceN', d: 0.3, sp: 2, solo: 1, minH: 1.6 },
-        { p: 'vines', at: 'faceN', d: 0.12, sp: 3, solo: 1 },
-        { p: 'vines', at: 'faceSide', d: 0.1, sp: 3, solo: 1 },
+        { p: 'skyIvy', at: 'faceN', d: 0.14, sp: 3, solo: 1 },
+        { p: 'skyIvy', at: 'faceSide', d: 0.12, sp: 3, solo: 1 },
         { p: 'skyStatue', at: 'cornerN', d: 0.3, sp: 5, h: 2.7, in: 0.6, solo: 1 },
         { p: 'skyColumn', at: 'cornerN', d: 0.4, sp: 4, h: 3.4, in: 0.6, solo: 1 },
         { p: 'skyBrazier', at: 'cornerN', d: 0.35, sp: 5, h: 1.7, in: 0.5, solo: 1 },
@@ -528,7 +543,7 @@
         { p: 'skyCrenel', at: 'wallTopN', d: 0.6, h: 0.6, rad: 0.3, solo: 1, rot0: 1, snap: 1, s: [1, 1] },
         { p: 'skyCrenel', at: 'wallTopSide', d: 0.4, h: 0.6, rad: 0.3, solo: 1, s: [1, 1] },
         { p: 'skyPennant', at: 'wallTopN', d: 0.12, sp: 4, h: 2.2, rad: 0.5 },
-        { p: 'skyGarden', at: 'wallTop', d: 0.22 },
+        { p: 'skyGarden', at: 'wallTop', d: 0.16 },
         { p: 'skyStatue', at: 'wallTopN', d: 0.03, sp: 8, h: 2.6, solo: 1 },
         { p: 'skyFlowers', at: 'pitEdge', d: 0.15, in: 0.35 },
       ],
@@ -537,7 +552,7 @@
     },
     mushroom: {
       pal: {
-        cap: [0x6a2ab8, 0x138a86, 0xa8247a, 0x2a4ac0], capGlow: [0xc070ff, 0x3affd8, 0xff5ac8, 0x6a9aff], spot: [0xf0c8ff, 0xc8fff0, 0xffd0f0, 0xd0e0ff],
+        cap: [0x4e2488, 0x10605e, 0x7a1c5c, 0x26347a], capGlow: [0xc070ff, 0x3affd8, 0xff5ac8, 0x6a9aff], spot: [0xf0c8ff, 0xc8fff0, 0xffd0f0, 0xd0e0ff],
         stem: 0xb8aac8, vine: 0x2a3a4a, berry: [0x5affd8, 0xd07aff, 0xffd060], moss: 0x1e5a5a, mossTop: 0x24504e, dot: [0x5affd8, 0x9a7aff],
         rock: 0x3a3450, stones: [0x3a3450, 0x463e5c, 0x302a42], crystal: 0xb06aff, crystal2: 0x6affe8, stone: 0x3a3450, root: 0x2e2638, bubble: 0xb8ffe8, firefly: 0xc8ff9a,
       },
@@ -555,14 +570,14 @@
         { p: 'crystals', at: 'cornerN', d: 0.4, in: 0.35, solo: 1 },
         { p: 'shroomCluster', at: 'cornerS', d: 0.5, in: 0.4, s: [0.8, 1] },
         { p: 'shroomTall', at: 'edgeN', d: 0.05, sp: 6, h: 2.6, in: 0.5, solo: 1 },
-        { p: 'shroomCluster', at: 'edgeN', d: 0.2, sp: 2, in: 0.35 },
-        { p: 'shroomCluster', at: 'edge', d: 0.08, in: 0.3 },
+        { p: 'shroomCluster', at: 'edgeN', d: 0.14, sp: 2, in: 0.35 },
+        { p: 'shroomCluster', at: 'edge', d: 0.05, in: 0.3 },
         { p: 'crystals', at: 'edge', d: 0.03, sp: 6, in: 0.3, solo: 1 },
         { p: 'shroomMoss', at: 'edge', d: 0.3, in: 0.5 },
         { p: 'rubble', at: 'edge', d: 0.08, in: 0.3 },
         { p: 'shroomMoss', at: 'floor', d: 0.06 },
         { p: 'shroomCluster', at: 'floor', d: 0.015 },
-        { p: 'shroomCluster', at: 'wallTop', d: 0.22, h: 0.6 },
+        { p: 'shroomCluster', at: 'wallTop', d: 0.07, h: 0.6 },
         { p: 'shroomStalag', at: 'wallTopN', d: 0.08, sp: 3, h: 2.0, rad: 0.5, s: [0.6, 0.8] },
         { p: 'shroomMoss', at: 'wallTop', d: 0.3 },
         { p: 'rubble', at: 'wallTop', d: 0.1 },
@@ -574,7 +589,7 @@
     },
     pirate: {
       pal: {
-        wood: [0x6a4a30, 0x5a3e28, 0x7a5636], post: 0x4a3626, iron: 0x3a3a3e, ironDark: 0x222226, rope: 0xb8a070, sack: 0xb8a27a,
+        wood: [0x6e4c30, 0x5c3e28, 0x80593a], post: 0x4e3826, iron: 0x3a3a3e, ironDark: 0x222226, rope: 0xb8a070, sack: 0xb8a27a,
         glass: 0xffc860, fire: 0xffa63a, fire2: 0xfff0b0, net: 0x9a8a62, float: [0xd8572a, 0xe8dcc0], kelp: 0x2e5a3a, kelp2: 0x4a6a2e,
         sail: 0xc8c0a8, rock: 0x3a4446, foam: 0xe8f4f6, foam2: 0xb8d4dc, spray: 0xcfeef6, star: [0xe0702a, 0xd84a3a], shell: 0xe8dcc8,
         gold: 0xf0c040, glint: 0xfff6c0, stones: [0x4a5052, 0x5a6062, 0x3e4446],
@@ -585,7 +600,8 @@
       rules: [
         { p: 'pirateMast', at: 'void', d: 0.1, sp: 5, h: 7.2, rad: 0.9 },
         { p: 'pirateRock', at: 'void', d: 0.16, sp: 2, h: 2.2, rad: 0.9 },
-        { p: 'pirateWallLantern', at: 'faceN', d: 0.14, sp: 4, solo: 1, minH: 1.6 },
+        { p: 'pirateWallLantern', at: 'faceN', d: 0.24, sp: 3, solo: 1, minH: 1.6 },
+        { p: 'pirateWallLantern', at: 'faceSide', d: 0.08, sp: 4, solo: 1, minH: 1.6 },
         { p: 'pirateNet', at: 'faceN', d: 0.16, sp: 3, solo: 1 },
         { p: 'pirateNet', at: 'faceSide', d: 0.08, sp: 3, solo: 1 },
         { p: 'pirateLantern', at: 'cornerN', d: 0.5, sp: 5, h: 2.1, in: 0.45, solo: 1 },
@@ -593,7 +609,7 @@
         { p: 'pirateCargo', at: 'cornerS', d: 0.3, in: 0.5, s: [0.75, 0.9], solo: 1 },
         { p: 'pirateAnchor', at: 'edgeN', d: 0.05, sp: 6, in: 0.3, solo: 1 },
         { p: 'pirateCargo', at: 'edgeN', d: 0.1, sp: 3, in: 0.5, solo: 1 },
-        { p: 'pirateLantern', at: 'edgeN', d: 0.04, sp: 6, h: 2.1, in: 0.4, solo: 1 },
+        { p: 'pirateLantern', at: 'edgeN', d: 0.07, sp: 5, h: 2.1, in: 0.4, solo: 1 },
         { p: 'pirateCargo', at: 'edgeE', d: 0.05, sp: 4, in: 0.5, solo: 1 },
         { p: 'pirateCargo', at: 'edgeW', d: 0.05, sp: 4, in: 0.5, solo: 1 },
         { p: 'pirateRope', at: 'edge', d: 0.06, in: 0.5 },
