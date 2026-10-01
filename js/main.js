@@ -111,7 +111,7 @@ function quitToMenu() {
 // =====================================================================
 const NET_HZ = 20, SEND_MS = 1000 / NET_HZ;
 const SNAP_BUDGET = 1100;           // bytes: one SCTP/DTLS packet (fragments of unreliable msgs get lost)
-const INTERP_MIN = 100, INTERP_MAX = 280, EXTRAP_MAX = 200;
+const INTERP_MIN = 100, INTERP_MAX = 320, EXTRAP_MAX = 200;
 const EV_IMPORTANT = new Set(['die', 'msg', 'bossdead', 'down', 'revived']);
 const EV_POS = new Set(['dmg', 'boom', 'ring', 'tele', 'teleline', 'zap', 'die', 'dashfx']); // a[1], a[2] = x, z
 const EV_OWN = new Set(['hurt', 'pick']);                                                     // a[1] = player id
@@ -124,6 +124,7 @@ class TimeSync {
   reset() { this.base = null; this.lastNow = 0; this.jit = []; this.delay = INTERP_MIN; this.target = INTERP_MIN; this.p90 = 0; }
   sample(tm, now) {
     const lat = now - tm; // one-way delay + clock offset
+    if (this.base !== null && Math.abs(lat - this.base) > 5000) this.reset(); // remote clock restarted
     if (this.base === null) this.base = lat;
     else { this.base += (now - this.lastNow) * 0.004; if (lat < this.base) this.base = lat; } // creep up 4 ms/s
     this.lastNow = now;
@@ -438,7 +439,7 @@ Net.onPeerLeave = id => {
     '.roomqr{background:#fff;border-radius:10px;image-rendering:pixelated;display:block;margin:0 auto}',
     '#codeIn{font:900 44px ui-monospace,Menlo,Consolas,monospace;text-align:center;letter-spacing:12px;text-transform:uppercase;padding:8px 6px}',
     '#netBadge{position:fixed;right:calc(12px + env(safe-area-inset-right));top:68px;z-index:60;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:3px 8px;font:700 12px system-ui,sans-serif;color:#fff;pointer-events:auto;touch-action:manipulation}',
-    '#netInfo{position:fixed;right:calc(12px + env(safe-area-inset-right));top:94px;z-index:60;max-width:min(380px,80vw);background:rgba(10,10,20,.92);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:8px 10px;font:11px/1.35 ui-monospace,Menlo,monospace;color:#dfe;white-space:pre-wrap;pointer-events:auto;touch-action:manipulation}',
+    '#netInfo{position:fixed;right:calc(12px + env(safe-area-inset-right));top:94px;z-index:60;max-width:min(380px,80vw);background:rgba(10,10,20,.92);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:8px 10px;font:11px/1.35 ui-monospace,Menlo,monospace;color:#dfe;white-space:pre-wrap;pointer-events:none}',
     '#reconn{position:fixed;left:50%;top:34%;transform:translate(-50%,-50%);z-index:70;background:rgba(0,0,0,.72);padding:12px 18px;border-radius:14px;font-weight:900;font-size:20px;color:#fff;text-align:center;pointer-events:none}',
   ].join('');
   document.head.appendChild(st);
@@ -469,7 +470,7 @@ function renderRoomInfo() {
   if ($('roomStatus')) $('roomStatus').textContent = ROOM_STATUS_TEXT[Net.roomStatus()] || '';
   if (code && $('roomQR') && roomQRFor !== code) {
     roomQRFor = code;
-    drawQRCanvas($('roomQR'), joinUrl(code), Math.max(110, Math.min(180, innerHeight * 0.36, innerWidth * 0.4)));
+    drawQRCanvas($('roomQR'), joinUrl(code), Math.max(110, Math.min(190, innerHeight * 0.4, innerWidth * 0.22)));
   }
 }
 Net.onRoomStatus = () => { renderRoomInfo(); if (addPanelOpen) showAddPlayerPanel(); };
@@ -542,6 +543,8 @@ function joinByCode(raw) {
 }
 function onGuestConnected(id) {
   G.myId = id;
+  // fresh snapshot state: the host may be a new session (seq, clock and entity ids restart)
+  snapBuf.length = 0; statCache.clear(); goneE.clear(); lastSnapQ = -1; snapSync.reset(); G.snap = null;
   Net.send(0, { t: 'hello', st: myStats() });
   if (!G.inGame) {
     ['menu', 'join'].forEach(i => $(i).classList.add('hidden'));
@@ -622,8 +625,7 @@ addEventListener('hashchange', checkJoinLink);
 const netBadge = document.createElement('div'); netBadge.id = 'netBadge'; netBadge.className = 'hidden';
 const netInfo = document.createElement('div'); netInfo.id = 'netInfo'; netInfo.className = 'hidden';
 document.body.appendChild(netBadge); document.body.appendChild(netInfo);
-netBadge.addEventListener('click', () => { netInfo.classList.toggle('hidden'); updateBadge(); });
-netInfo.addEventListener('click', () => netInfo.classList.add('hidden'));
+netBadge.addEventListener('click', () => { netInfo.classList.toggle('hidden'); updateBadge(); }); // tap again to close
 let badgeBusy = false, lastStatsT = performance.now(), lastStats = { sent: 0, sentBytes: 0, recv: 0, recvBytes: 0, extrapT: 0 };
 function rttDot(s) { return !s || s.rtt == null ? '🔴' : s.rtt < 120 ? '🟢' : s.rtt < 250 ? '🟡' : '🔴'; }
 function updateBadge() {

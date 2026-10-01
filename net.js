@@ -929,7 +929,7 @@
       var sv = JSON.parse(localStorage.getItem('dd_room') || 'null');
       if (sv && normCode(sv.c) && Date.now() - sv.t < 3 * 3600 * 1000) { code = sv.c; restored = true; }
     } catch (e) {}
-    room = { code: code || rnd(4, CODE_ABC), tr: null, status: 'connecting', restored: restored, idTries: 0, retry: null };
+    room = { code: code || rnd(4, CODE_ABC), tr: null, status: 'connecting', restored: restored, idTries: 0, fails: 0, retry: null };
     Net.roomCode = room.code;
     roomConnect();
     return room.code;
@@ -949,10 +949,12 @@
       if (room !== r) return;
       if (r.tr) { r.tr.destroy(); r.tr = null; }
       roomStatus('offline');
-      if (!r.retry) r.retry = setTimeout(function () { r.retry = null; if (room === r) roomConnect(); }, ROOM_RETRY_MS);
+      // back off 6 s, 12 s, 24 s, 30 s... (an 'online' event retries right away)
+      var wait = Math.min(30000, ROOM_RETRY_MS * Math.pow(2, Math.min(3, r.fails++)));
+      if (!r.retry) r.retry = setTimeout(function () { r.retry = null; if (room === r) roomConnect(); }, wait);
     };
     var tr = r.tr = makeTransport(hostPeerId(r.code), {
-      onOpen: function () { if (room === r && r.tr === tr) { r.idTries = 0; saveRoomCode(); roomStatus('open'); } },
+      onOpen: function () { if (room === r && r.tr === tr) { r.idTries = 0; r.fails = 0; saveRoomCode(); roomStatus('open'); } },
       onMsg: function (src, m) { if (room === r && r.tr === tr) hostSigMsg(src, m); },
       onError: function (type, msg) {
         if (room !== r || r.tr !== tr) return;
@@ -1269,6 +1271,11 @@
     Net.roomCode = null;
     setState('idle');
   };
+
+  // Signal came back: retry the room's signaling connection now instead of waiting for the backoff.
+  window.addEventListener('online', function () {
+    if (room && room.status === 'offline') { room.fails = 0; roomConnect(); }
+  });
 
   // Close connections cleanly when the page goes away so the other side notices fast.
   window.addEventListener('pagehide', function (e) {
