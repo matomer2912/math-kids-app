@@ -926,6 +926,7 @@ function buildLevel(map, theme) {
   grp.userData.portal = portal;
   grp.userData.anim = anim;
   grp.userData.themeLight = theme.light;
+  if (typeof buildDecor === 'function') buildDecor(map, theme, grp); // set dressing kits (decor.js)
   return grp;
 }
 
@@ -953,4 +954,5 @@ function animateLevel(level, t) {
   for (let n = 0; n < A.clouds.length; n++) { const c = A.clouds[n]; c.position.x += Math.sin(t * 0.3 + n) * 0.004; }
   if (level.userData.glow) level.userData.glow.material.uniforms.uTime.value = t % 1000;
   if (typeof LOOK_U !== 'undefined') LOOK_U.uLkTime.value = t % 1000; // ground mist drift, canopy sway (look.js)
+  if (typeof animateDecor === 'function') animateDecor(level, t);
 }
