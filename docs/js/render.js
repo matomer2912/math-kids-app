@@ -223,7 +223,56 @@ function particles(x, z, color, n, s) {
     scene.add(m); fxList.push(fx);
   }
 }
-const SKIN_COLORS = { mummy: 0xe8dcc0, skeleton: 0xeeeeee, zombie: 0x6aa84f, skelArcher: 0xeeeeee, scorpion: 0xb5651d, spider: 0x333333, imp: 0xd8381e, golem: 0x9a8a70, cube: 0x7cc242, priest: 0xf3e2a0, necro: 0x7a3cc2, boss: 0xffcc33, chest: 0xffc107, pot: 0xc0703a };
+const SKIN_COLORS = { mummy: 0xe8dcc0, skeleton: 0xeeeeee, zombie: 0x6aa84f, skelArcher: 0xeeeeee, scorpion: 0xb5651d, spider: 0x333333, imp: 0xd8381e, golem: 0x9a8a70, cube: 0x7cc242, priest: 0xf3e2a0, necro: 0x7a3cc2, boss: 0xffcc33, chest: 0xffc107, pot: 0xc0703a,
+  crate: 0xa8743a, barrel: 0x9a6a3a, xbarrel: 0xff5a1a, guard: 0xffc72c, bomber: 0x9a6a3a, slime: 0x6ad83a, charger: 0x6a4a2a, totem: 0x9a6a3a, mage: 0x4a6aff, egg: 0xff9ac0, lizard: 0x5aa83a, knight: 0xc8d0dc, shroom: 0xd05aff, pirate: 0xc0302a, crab: 0xd8482a, bat: 0x4a3a5a };
+// ---- extra boss / trap effects ----
+function lanesFx(x, z, ang, halfW, len, gapC, gapW, dur) { // wall of bones telegraph: red lanes, green safe gap
+  const grp = new THREE.Group();
+  const lo = -halfW, hi = halfW, g0 = gapC - gapW / 2, g1 = gapC + gapW / 2;
+  for (const [a, b, col] of [[lo, g0, 0xff2020], [g1, hi, 0xff2020], [g0, g1, 0x30ff60]]) {
+    if (b <= a) continue;
+    const m = new THREE.Mesh(PLANE, basic(col, col === 0x30ff60 ? 0.4 : 0.25)); m.rotation.x = -Math.PI / 2;
+    m.scale.set(b - a, len, 1); m.position.set((a + b) / 2, 0, len / 2); grp.add(m);
+  }
+  grp.position.set(x, 0.09, z); grp.rotation.y = ang;
+  addFx(grp, dur, (f, k) => { grp.children.forEach((m, i) => m.material.opacity = (i === grp.children.length - 1 ? 0.35 : 0.18) + 0.15 * Math.abs(Math.sin(f.t * 12))); });
+}
+function shockFx(x, z, maxR, spd, color) { // expanding ring band you can dodge-roll through
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), basic(color, 0.85));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.2, z);
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.7, 40, 1, true), basic(color, 0.35)); wall.position.set(x, 0.35, z);
+  const life = maxR / spd;
+  addFx(m, life, (f, k) => { const r = 1.5 + spd * f.t; m.scale.setScalar(r); wall.scale.set(r, 1, r); m.material.opacity = 0.85 * (1 - k * 0.5); });
+  addFx(wall, life, (f, k) => { wall.material.opacity = 0.35 * (1 - k * 0.5); });
+}
+function boltFx(x1, z1, x2, z2) { // lightning strike along a line
+  const pts = [];
+  for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(new THREE.Vector3(x1 + (x2 - x1) * t + (i % 10 ? (Math.random() - 0.5) * 1.2 : 0), 0.6 + Math.random() * 0.8, z1 + (z2 - z1) * t + (i % 10 ? (Math.random() - 0.5) * 1.2 : 0))); }
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xfff7a0, transparent: true }));
+  addFx(l, 0.35, (f, k) => { l.material.opacity = 1 - k; });
+  const ang = Math.atan2(x2 - x1, z2 - z1), len = Math.hypot(x2 - x1, z2 - z1);
+  const g = new THREE.Group(); const m = new THREE.Mesh(PLANE, basic(0xfff7a0, 0.7)); m.rotation.x = -Math.PI / 2; m.scale.set(3.4, len, 1); m.position.z = len / 2; g.add(m);
+  g.position.set(x1, 0.1, z1); g.rotation.y = ang; g.material = m.material;
+  addFx(g, 0.3, (f, k) => { m.material.opacity = 0.7 * (1 - k); });
+  sfx('zap'); G.shake = Math.max(G.shake, 0.25);
+}
+function cloudFx(x, z, r, dur, color) { // lingering poison / spore cloud
+  const grp = new THREE.Group();
+  const disc = new THREE.Mesh(discGeo, basic(color, 0.3)); disc.rotation.x = -Math.PI / 2; disc.scale.setScalar(r); disc.position.y = 0.06; grp.add(disc);
+  const puffs = [];
+  for (let i = 0; i < 6; i++) { const p = new THREE.Mesh(SPHG, basic(color, 0.28)); const a = i / 6 * 6.28; p.position.set(Math.sin(a) * r * 0.55, 0.6, Math.cos(a) * r * 0.55); p.scale.setScalar(r * 0.45); grp.add(p); puffs.push(p); }
+  grp.position.set(x, 0, z);
+  addFx(grp, dur, (f, k) => { const fade = k > 0.85 ? (1 - k) / 0.15 : 1; puffs.forEach((p, i) => { p.position.y = 0.6 + 0.25 * Math.sin(f.t * 2 + i); p.material.opacity = 0.28 * fade; }); disc.material.opacity = 0.3 * fade; });
+}
+function spikeLineFx(x, z, ang, len, color) { // a row of ice spikes erupting
+  const grp = new THREE.Group();
+  const mat = basic(color, 0.95);
+  const cone = new THREE.ConeGeometry(0.45, 1.6, 4);
+  for (let d = 1.2; d < len; d += 1.3) { const m = new THREE.Mesh(cone, mat); m.position.set((Math.random() - 0.5) * 0.6, 0, d); m.userData.d = d; grp.add(m); }
+  grp.position.set(x, 0, z); grp.rotation.y = ang; grp.material = mat;
+  addFx(grp, 0.9, (f, k) => { grp.children.forEach(m => { const s = Math.min(1, Math.max(0, (f.t * 30 - m.userData.d) / 3)); m.position.y = -0.8 + 1.6 * s * (k > 0.7 ? (1 - k) / 0.3 : 1); }); });
+}
+function blockFx(x, z) { particles(x, z, 0xfff3a0, 5, 0.8); ringFx(x, z, 1.0, 0xffffff); sfx('hit'); }
 function dieFx(x, z, sk, size) {
   const name = SKINS[sk];
   particles(x, z, SKIN_COLORS[name] || 0xffffff, name === 'boss' ? 30 : 7, Math.max(1, size || 1));
@@ -278,6 +327,12 @@ function handleEvent(a) {
     case 'special': sfx('special'); break;
     case 'dashfx': { const m = new THREE.Mesh(PLANE, basic(0xb0e0ff, 0.5)); m.rotation.x = -Math.PI / 2; m.scale.set(1.2, 8, 1); const g = new THREE.Group(); g.add(m); m.position.z = 4; g.position.set(a[1], 0.5, a[2]); g.rotation.y = a[3]; g.material = m.material; addFx(g, 0.25, (f, k) => m.material.opacity = 0.5 * (1 - k)); break; }
     case 'sfx': sfx(a[1]); break;
+    case 'lanes': lanesFx(a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]); break;
+    case 'shock': shockFx(a[1], a[2], a[3], a[4], a[5]); break;
+    case 'bolt': boltFx(a[1], a[2], a[3], a[4]); break;
+    case 'cloud': cloudFx(a[1], a[2], a[3], a[4], a[5]); break;
+    case 'spikeline': spikeLineFx(a[1], a[2], a[3], a[4], a[5]); break;
+    case 'block': blockFx(a[1], a[2]); break;
   }
 }
 
