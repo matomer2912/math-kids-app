@@ -24,13 +24,20 @@ function myStats() { return { lvl: Profile.lvl, wpn: equipped(), name: Profile.n
 // space, then ACES filmic tone mapping (per-world exposure) + sRGB output, all inside the material
 // shaders (no extra passes). Glowing things use toneMapped:false materials so they pop like bloom.
 THREE.ColorManagement.legacyMode = false;
+{ // cheaper PCF: 4 taps instead of three's 17 (the shadow map is sampled for every floor/wall pixel)
+  const c = THREE.ShaderChunk.shadowmap_pars_fragment, end = '( 1.0 / 17.0 );';
+  const a = c.indexOf('vec2 texelSize = vec2( 1.0 ) / shadowMapSize;'), b = c.indexOf(end, a);
+  if (a > 0 && b > a) THREE.ShaderChunk.shadowmap_pars_fragment = c.slice(0, a) + `vec2 o = vec2( 0.7 ) / shadowMapSize;
+			shadow = 0.25 * ( texture2DCompare( shadowMap, shadowCoord.xy + vec2( - o.x, - o.y ), shadowCoord.z ) + texture2DCompare( shadowMap, shadowCoord.xy + vec2( o.x, - o.y ), shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( - o.x, o.y ), shadowCoord.z ) + texture2DCompare( shadowMap, shadowCoord.xy + vec2( o.x, o.y ), shadowCoord.z ) );` + c.slice(b + end.length);
+}
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
 renderer.shadowMap.enabled = false;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 let lowPower = localStorage.getItem('dd_low') === '1';
 let soundOn = localStorage.getItem('dd_snd') !== '0';
 // Pixel ratio: capped at 1.25 (sharp enough on phones, much cheaper than 2-3x); the main loop
@@ -48,23 +55,27 @@ camera.position.set(0, CAM_H, CAM_D); camera.lookAt(0, 0, 0);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.82); scene.add(hemi);
 // "sun / moon": the only shadow caster; follows the hero with a tight orthographic frustum
 const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(-10, 25, 12); scene.add(sun); scene.add(sun.target);
-sun.shadow.camera.left = -17; sun.shadow.camera.right = 17; sun.shadow.camera.top = 17; sun.shadow.camera.bottom = -17;
-sun.shadow.camera.near = 2; sun.shadow.camera.far = 70;
-sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.035;
-const SUN_OFF = new THREE.Vector3(-9, 24, 10);
-// cool rim/fill light from behind (top of the screen) so silhouettes separate from the floor
-const fill = new THREE.DirectionalLight(0x8fb0ff, 0.25); fill.position.set(7, 12, -16); scene.add(fill);
-// soft light that follows the local hero (High/Medium)
-const heroLight = new THREE.PointLight(0xffe6c8, 0.5, 11, 1.5); heroLight.position.set(0, 3.2, 0);
+// Light from the west, a little from the camera side, ~45° up: shadows fall to the right where they are
+// visible (not hidden behind the characters) and fronts still catch some light.
+const SUN_OFF = new THREE.Vector3(-15, 17, 4);
+{ // size the orthographic shadow box to cover ~44 x 26 world units of floor around the view focus
+  const d = SUN_OFF.clone().normalize(), r = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), d).normalize(), u = new THREE.Vector3().crossVectors(d, r);
+  const hx = 22, hz = 13, hy = 3;
+  const sr = Math.abs(r.x) * hx + Math.abs(r.z) * hz + Math.abs(r.y) * hy, su = Math.abs(u.x) * hx + Math.abs(u.z) * hz + Math.abs(u.y) * hy;
+  Object.assign(sun.shadow.camera, { left: -sr, right: sr, top: su, bottom: -su, near: 2, far: 70 });
+}
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
+// soft light that follows the local hero (High only; lower tiers get a fake glow pool)
+const heroLight = new THREE.PointLight(0xffe6c8, 0.55, 10, 1.5); heroLight.position.set(0, 3.2, 0);
 // fixed pool of point lights moved to the torches / lava / crystals nearest the hero (count per tier is
 // constant, so moving between torches never changes the shader light count = no recompiles)
 const pointPool = [];
 
 // ---------- graphics quality tiers ----------
 const GFX_TIERS = {
-  high:   { shadow: 1024, soft: true,  lights: 3, hero: true,  parts: 120, glow: 1 },
-  medium: { shadow: 512,  soft: false, lights: 1, hero: true,  parts: 70,  glow: 1 },
-  low:    { shadow: 0,    soft: false, lights: 0, hero: false, parts: 0,   glow: 0.85 },
+  high:   { shadow: 1024, soft: false, lights: 3, hero: true,  parts: 120, glow: 0.9 },
+  medium: { shadow: 512,  soft: false, lights: 1, hero: false, parts: 70,  glow: 1 },
+  low:    { shadow: 0,    soft: false, lights: 0, hero: false, parts: 0,   glow: 1.1 },
 };
 const GFX_ORDER = ['high', 'medium', 'low'];
 const GFX_LABEL = { high: 'High', medium: 'Medium', low: 'Low', auto: 'Auto' };
@@ -134,14 +145,13 @@ function resize() {
 addEventListener('resize', resize); resize();
 
 // per-world lighting: exposure, light colours, fog, background, CSS vignette tint
-const GFX_DEF = { exp: 1.0, hemi: 0.8, sun: [0xfff2dd, 1.0], fill: [0x8fb0ff, 0.3], fog: [26, 50], amb: 'dust', vig: 'rgba(0,0,0,.5)' };
+const GFX_DEF = { exp: 1.0, hemi: 0.8, sun: [0xfff2dd, 1.0], fog: [26, 50], amb: 'dust', vig: 'rgba(0,0,0,.5)' };
 function applyThemeLighting(T) {
   const L = Object.assign({}, GFX_DEF, T.gfx || {});
   scene.background = new THREE.Color(T.voidc);
   scene.fog = new THREE.Fog(T.voidc, L.fog[0], L.fog[1]);
   hemi.color.setHex(T.hemi); hemi.groundColor.setHex(T.ground); hemi.intensity = L.hemi;
   sun.color.setHex(L.sun[0]); sun.intensity = L.sun[1];
-  fill.color.setHex(L.fill[0]); fill.intensity = L.fill[1];
   heroLight.color.setHex(L.hero || 0xffe6c8);
   renderer.toneMappingExposure = L.exp;
   document.documentElement.style.setProperty('--vig', L.vig);

@@ -23,7 +23,8 @@ function sharedGpu() {
   const s = new Set();
   const add = (...a) => { for (const x of a) if (x) s.add(x); };
   add(typeof BOXG !== 'undefined' && BOXG, typeof SPHG !== 'undefined' && SPHG, typeof SHADOW_GEO !== 'undefined' && SHADOW_GEO,
-    typeof SHADOW_MAT !== 'undefined' && SHADOW_MAT, PLANE, HPBAR_BG, HPBAR_FG, ringGeo, discGeo);
+    typeof SHADOW_MAT !== 'undefined' && SHADOW_MAT, PLANE, HPBAR_BG, HPBAR_FG, ringGeo, discGeo, LOOT_GLOW_GEO);
+  for (const k in lootGlowMats) add(lootGlowMats[k]);
   for (const k in sectorCache) add(sectorCache[k]);
   for (const k in partMats) add(partMats[k]);
   return s;
@@ -79,6 +80,8 @@ function syncVisuals(dt) {
       const model = buildPlayerModel(p.color);
       o = { obj: model.root, model, x: p.x, z: p.z, f: p.f, px: p.x, pz: p.z, color: p.color };
       scene.add(o.obj); vis.set(key, o);
+      // the hero ring stays visible through walls so a hero behind a wall is never lost
+      if (model.ring) { model.ring.material.depthTest = false; model.ring.material.toneMapped = false; model.ring.renderOrder = 9; }
     }
     o.seen = visFrame; o.seenT = T;
     const mine = p.id === G.myId;
@@ -87,6 +90,8 @@ function syncVisuals(dt) {
     const spd = Math.hypot(o.x - o.px, o.z - o.pz) / Math.max(dt, 0.001);
     const wpnW = mine ? equipped().w : p.w, wpnR = mine ? equipped().r : p.r;
     setWeapon(o.model, wpnW, wpnR);
+    if (o.prep !== o.model.wkey) { o.prep = o.model.wkey; prepModel(o.obj); }
+    if (mine && !o.glow) { o.glow = lootGlow(0xffe2c0, 6.5, 0.2); o.obj.add(o.glow); } // soft light pool around the local hero
     let f = mine ? me.f : (p.atk ? p.aim : p.f);
     o.f = lerpAngle(o.f, f, Math.min(1, dt * 18));
     o.obj.position.set(o.x, 0, o.z);
@@ -111,10 +116,10 @@ function syncVisuals(dt) {
       const model = buildEnemyModel(e.sk, G.theme, e.size);
       o = { obj: model.root, model, x: e.x, z: e.z, f: e.f, px: e.x, pz: e.z };
       if (e.fl & 16) { // elite glow ring (geometry/material are freed by gpuCollect when removed)
-        const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 20), new THREE.MeshBasicMaterial({ color: 0xffb300, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 20), new THREE.MeshBasicMaterial({ color: 0xffb300, side: THREE.DoubleSide, transparent: true, opacity: 0.9, toneMapped: false }));
         ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; model.root.add(ring);
       }
-      scene.add(o.obj); vis.set(key, o);
+      scene.add(o.obj); vis.set(key, o); prepModel(o.obj);
       if (e.sk !== 'boss' && !isPropSkin(e.sk)) { o.bar = makeBar(); o.bar.visible = false; scene.add(o.bar); }
     }
     o.seen = visFrame; o.seenT = T;
@@ -164,6 +169,8 @@ function syncVisuals(dt) {
     let o = vis.get(key);
     if (!o) {
       const model = buildLootModel(l.kind, l.r, l.w);
+      if (l.kind === 'item') model.add(lootGlow(RAR[l.r].hex, 3.2 + l.r * 0.5, 0.35 + l.r * 0.12));
+      else if (l.kind === 'coin') model.add(lootGlow(0xffc83a, 1.6, 0.25));
       o = { obj: model, x: l.x, z: l.z, born: T };
       scene.add(o.obj); vis.set(key, o);
     }
@@ -189,6 +196,7 @@ function syncVisuals(dt) {
     pu.ring.material.color.setHex(open ? 0x00e5ff : 0x555555);
     pu.disc.material.opacity = open ? 0.55 + 0.2 * Math.sin(T * 5) : 0;
     pu.ring.rotation.z += dt * (open ? 2 : 0.2);
+    if (pu.glow) { pu.glow.visible = open; pu.glow.material.uniforms.uTime.value = T; }
   }
   if (G.level && G.level.userData.flame) {
     const fm = G.level.userData.flame.material;
@@ -212,7 +220,7 @@ function updateFx(dt) {
 const ringGeo = new THREE.RingGeometry(0.86, 1, 40);
 const discGeo = new THREE.CircleGeometry(1, 32);
 const sectorCache = {};
-function basic(color, op) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide }); }
+function basic(color, op) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }); }
 function slashFx(pid, ang, range, arc, rar) {
   const key = range + '_' + arc;
   if (!sectorCache[key]) sectorCache[key] = new THREE.RingGeometry(range * 0.35, range, 16, 1, -Math.PI / 2 - arc / 2, arc);
@@ -258,14 +266,14 @@ function zapFx(x1, z1, x2, z2) {
   const pts = [new THREE.Vector3(x1, 1.2, z1)];
   for (let i = 1; i < 4; i++) { const t = i / 4; pts.push(new THREE.Vector3(x1 + (x2 - x1) * t + (Math.random() - 0.5), 1.2 + (Math.random() - 0.5) * 0.6, z1 + (z2 - z1) * t + (Math.random() - 0.5))); }
   pts.push(new THREE.Vector3(x2, 1.2, z2));
-  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x9ff0ff }));
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x9ff0ff, toneMapped: false }));
   addFx(l, 0.18, (f, k) => { l.material.opacity = 1 - k; });
   sfx('zap');
 }
 const partMats = {};
 function particles(x, z, color, n, s) {
   if (fxList.length > 160) return;
-  const mat = partMats[color] || (partMats[color] = new THREE.MeshBasicMaterial({ color }));
+  const mat = partMats[color] || (partMats[color] = new THREE.MeshBasicMaterial({ color, toneMapped: false }));
   for (let i = 0; i < n; i++) {
     const m = new THREE.Mesh(BOXG, mat);
     const sz = (0.12 + Math.random() * 0.15) * s; m.scale.setScalar(sz);
@@ -300,7 +308,7 @@ function shockFx(x, z, maxR, spd, color) { // expanding ring band you can dodge-
 function boltFx(x1, z1, x2, z2) { // lightning strike along a line
   const pts = [];
   for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(new THREE.Vector3(x1 + (x2 - x1) * t + (i % 10 ? (Math.random() - 0.5) * 1.2 : 0), 0.6 + Math.random() * 0.8, z1 + (z2 - z1) * t + (i % 10 ? (Math.random() - 0.5) * 1.2 : 0))); }
-  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xfff7a0, transparent: true }));
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xfff7a0, transparent: true, toneMapped: false }));
   addFx(l, 0.35, (f, k) => { l.material.opacity = 1 - k; });
   const ang = Math.atan2(x2 - x1, z2 - z1), len = Math.hypot(x2 - x1, z2 - z1);
   const g = new THREE.Group(); const m = new THREE.Mesh(PLANE, basic(0xfff7a0, 0.7)); m.rotation.x = -Math.PI / 2; m.scale.set(3.4, len, 1); m.position.z = len / 2; g.add(m);
@@ -398,5 +406,106 @@ function updateCamera(dt) {
     const s = G.shake * 0.35;
     camera.position.x += (Math.random() - 0.5) * s; camera.position.z += (Math.random() - 0.5) * s;
   }
+  updateLights(dt);
+}
+
+// ---------- lighting (see core.js for the lights and quality tiers) ----------
+// Models: lit meshes cast real shadows (blob shadows are hidden while real shadows are on); glowing
+// MeshBasic parts (eyes, gems, rings) skip tone mapping so they read as emissive.
+function prepModel(root) {
+  root.traverse(n => {
+    if (!n.isMesh || !n.material) return;
+    const m = n.material;
+    if (m.isMeshLambertMaterial) n.castShadow = Math.max(n.scale.x, n.scale.y, n.scale.z) >= 0.25; // tiny bits (eyes, trims) don't cast
+    else if (m.isMeshBasicMaterial && m !== SHADOW_MAT && m.toneMapped) { m.toneMapped = false; m.needsUpdate = true; }
+  });
+}
+// additive glow pool under loot (shared material per colour, shared geometry)
+const LOOT_GLOW_GEO = new THREE.PlaneGeometry(1, 1);
+const lootGlowMats = {};
+function lootGlow(color, size, inten) {
+  const key = color + '_' + inten;
+  let m = lootGlowMats[key];
+  if (!m) { m = lootGlowMats[key] = makeGlowMaterial(); m.uniforms.uColor.value.setHex(color).multiplyScalar(inten); m.userData.shared = true; }
+  const g = new THREE.Mesh(LOOT_GLOW_GEO, m);
+  g.rotation.x = -Math.PI / 2; g.position.y = 0.06; g.scale.setScalar(size); g.renderOrder = 2;
+  return g;
+}
+const _ld = SUN_OFF.clone().normalize(), _lr = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), _ld).normalize(), _lu = new THREE.Vector3().crossVectors(_ld, _lr);
+const _lt = new THREE.Vector3();
+let lightPickT = 0, ambT = 0, lastLevel = null, shadowTick = 0;
+function updateLights(dt) {
+  const fx = me.x, fz = me.z - 1.5; // focus a bit up-screen: the visible area is wider at the top
+  // sun: follow the hero, snapped to whole shadow-map texels in light space (no shimmering edges)
+  if (sun.castShadow) {
+    const sc = sun.shadow.camera, texel = (sc.right - sc.left) / sun.shadow.mapSize.x, texelV = (sc.top - sc.bottom) / sun.shadow.mapSize.y;
+    _lt.set(fx, 0, fz);
+    const r = Math.round(_lt.dot(_lr) / texel) * texel, u = Math.round(_lt.dot(_lu) / texelV) * texelV, d = _lt.dot(_ld);
+    _lt.copy(_lr).multiplyScalar(r).addScaledVector(_lu, u).addScaledVector(_ld, d);
+    sun.target.position.copy(_lt); sun.position.copy(_lt).add(SUN_OFF);
+    // shadow map refresh at half the frame rate (halves the shadow pass cost; 1 frame of lag is invisible)
+    renderer.shadowMap.autoUpdate = false;
+    if ((shadowTick = (shadowTick + 1) % 2) === 0 || lastLevel !== G.level) renderer.shadowMap.needsUpdate = true;
+  } else { sun.target.position.set(fx, 0, fz); sun.position.set(fx, 0, fz).add(SUN_OFF); }
+  heroLight.position.set(me.x, 3.2, me.z + 0.6);
+  const lv = G.level;
+  if (lv !== lastLevel) { lastLevel = lv; lightPickT = 0; ambT = 0; for (const p of pointPool) { p.c = null; p.k = 0; p.light.intensity = 0; } onGfxChange(); }
+  if (!lv) return;
+  // point-light pool: every 0.25 s pick the light spots nearest the hero; lights fade out before they move
+  const cands = lv.userData.lights || [];
+  lightPickT -= dt;
+  if (lightPickT <= 0 && pointPool.length) {
+    lightPickT = 0.25;
+    const best = [];
+    for (const c of cands) {
+      const d = (c.x - fx) * (c.x - fx) + (c.z - fz) * (c.z - fz);
+      if (d > 22 * 22) continue;
+      c._d = d; best.push(c);
+    }
+    best.sort((a, b) => a._d - b._d); best.length = Math.min(best.length, pointPool.length);
+    for (const p of pointPool) p.out = !!p.c && !best.includes(p.c);
+    for (const c of best) {
+      if (pointPool.some(p => p.c === c)) continue;
+      const free = pointPool.find(p => !p.c);
+      if (!free) break;
+      free.c = c; free.k = 0; free.out = false;
+      free.light.position.set(c.x, c.y, c.z); free.light.color.setHex(c.c); free.light.distance = c.d;
+    }
+  }
+  const t = G.time;
+  for (let n = 0; n < pointPool.length; n++) {
+    const p = pointPool[n];
+    if (!p.c) { p.light.intensity = 0; continue; }
+    p.k = p.out ? p.k - dt * 4 : Math.min(1, p.k + dt * 3);
+    if (p.k <= 0) { p.c = null; p.light.intensity = 0; continue; }
+    p.light.intensity = p.c.i * p.k * (0.88 + 0.08 * Math.sin(t * 9 + n * 2.1) + 0.05 * Math.sin(t * 15.7 + n));
+  }
+  // ambient particles follow the view
+  const amb = lv.userData.amb;
+  if (amb && amb.visible) {
+    ambT += dt;
+    const u = amb.material.uniforms;
+    u.uTime.value = ambT % 3600; u.uCenter.value.set(fx, 0, fz);
+  }
+}
+// quality tier / resize / level change: glow gain, particle count, point size scale, fog fade distances
+function onGfxChange() {
+  const lv = G.level; if (!lv) return;
+  const L = GFX.L || {};
+  const fog = L.fog || [26, 50];
+  const gain = GFX.T.glow * (L.gl || 1);
+  if (lv.userData.glow) { const u = lv.userData.glow.material.uniforms; u.uGain.value = gain; u.uFogN.value = fog[0]; u.uFogF.value = fog[1] + 6; }
+  for (const k in lootGlowMats) lootGlowMats[k].uniforms.uGain.value = Math.max(0.5, gain);
+  const amb = lv.userData.amb;
+  if (amb) {
+    amb.visible = GFX.T.parts > 0;
+    amb.geometry.setDrawRange(0, Math.min(AMB_MAX, Math.round(GFX.T.parts * (L.ambN || 1))));
+    amb.material.uniforms.uFogF.value = fog[1];
+    onResizeGfx();
+  }
+}
+function onResizeGfx() {
+  const amb = G.level && G.level.userData.amb; if (!amb) return;
+  amb.material.uniforms.uScale.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
 }
 

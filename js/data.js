@@ -126,7 +126,7 @@ const THEMES = [
     golem: 0xc9a25e, cube: 0x7cc242, bone: 0xf1e6c8, accent: 0x2f6fd6, deco: 'desert',
     pit: { c: 0x4a3018, c2: 0x7a5428, glow: 0 }, slow: { c: 0xb8904c, name: 'Quicksand' }, pattern: 'cracks', walls: 'brick', traps: ['spike', 'plate'],
     light: 0xffa31a, carpet: 0x2f6fd6, carpet2: 0xffc72c, slime: 0xe0c060, guard: [0x1a1a1a, 0xffc72c], mage: [0x2457c5, 0xffc72c], totem: 0xc9a25e, charger: 0x2a6a8a,
-    gfx: { exp: 1.0, hemi: 0.72, sun: [0xffdcaa, 1.25], fill: [0x7aa8ff, 0.3], fog: [27, 54], amb: 'dust', vig: 'rgba(60,28,0,.42)' },
+    gfx: { exp: 0.85, gl: 0.55, hemi: 0.72, sun: [0xffdcaa, 1.25], fog: [27, 54], amb: 'dust', vig: 'rgba(60,28,0,.42)' },
     boss: { name: 'The Sand Pharaoh', kind: 'pharaoh', body: 0xe0b44a, accent: 0x2457c5, skin: 0x9a6b3a, eye: 0x3dffd0, sig: ['spiral', 'spiral', 'raise'] },
   },
   {
@@ -135,7 +135,7 @@ const THEMES = [
     golem: 0x7d8088, cube: 0x58c43a, bone: 0xe9e9e0, accent: 0x7a3cc2, deco: 'crypt',
     pit: { c: 0x07060c, c2: 0x3a1a60, glow: 0 }, slow: { c: 0xd8d8e0, name: 'Cobwebs', web: true }, pattern: 'slabs', walls: 'bone', traps: ['spike', 'plate'],
     light: 0xb08aff, carpet: 0x8a1a2a, carpet2: 0xc9a227, slime: 0x7dffb0, guard: [0xd8d8d0, 0x7a3cc2], mage: [0x3a1a6a, 0x9a6aff], totem: 0xe9e9e0, charger: 0x55585f,
-    gfx: { exp: 1.15, hemi: 0.7, sun: [0xb8c6ff, 0.8], fill: [0xa080ff, 0.4], fog: [24, 48], amb: 'wisp', vig: 'rgba(8,0,28,.6)' },
+    gfx: { exp: 1.15, gl: 1, hemi: 0.7, sun: [0xb8c6ff, 0.8], fog: [24, 48], amb: 'wisp', vig: 'rgba(8,0,28,.6)' },
     boss: { name: 'The Skeleton King', kind: 'skelking', body: 0xe8e6da, accent: 0x7a1fc2, skin: 0xe8e6da, eye: 0xff2a2a, sig: ['bonewall', 'bonewall', 'raise'] },
   },
   {
@@ -144,7 +144,7 @@ const THEMES = [
     golem: 0x6f8060, cube: 0x3fbf3a, bone: 0xe0dcc0, accent: 0x1f9a5a, deco: 'jungle',
     pit: { c: 0x1a4a44, c2: 0x2f7a6a, glow: 0 }, slow: { c: 0x5a4126, name: 'Mud' }, pattern: 'moss', walls: 'vine', traps: ['plate', 'spike'],
     light: 0xffb63a, carpet: 0x8a5a2a, carpet2: 0xd0a040, slime: 0x6ad83a, guard: [0x3a8a3a, 0xd0a040], mage: [0x1f6a3a, 0xff7a2a], totem: 0x9a6a3a, charger: 0x6a4a2a,
-    gfx: { exp: 1.05, hemi: 0.72, sun: [0xfff0c0, 1.1], fill: [0x80ffc0, 0.3], fog: [25, 50], amb: 'leaf', vig: 'rgba(0,24,6,.5)' },
+    gfx: { exp: 1, gl: 0.8, hemi: 0.72, sun: [0xfff0c0, 1.1], fog: [25, 50], amb: 'leaf', vig: 'rgba(0,24,6,.5)' },
     boss: { name: 'The Spider Queen', kind: 'spider', body: 0x2a2030, accent: 0xc02060, skin: 0x2a2030, eye: 0xff3070, sig: ['eggs', 'leap', 'leap'] },
   },
   {
@@ -153,7 +153,7 @@ const THEMES = [
     golem: 0x3a2a26, cube: 0xff6a1a, bone: 0x3b3433, accent: 0xff4a10, deco: 'lava',
     pit: { c: 0xff4a00, c2: 0xffa000, glow: 1 }, slow: { c: 0x2a2220, name: 'Ash' }, pattern: 'basalt', walls: 'basalt', traps: ['vent', 'spike'],
     light: 0xff7a1a, carpet: 0x5a1a10, carpet2: 0xff7a1a, slime: 0xff5a1a, guard: [0x3a3a40, 0xff6a00], mage: [0x6a1a10, 0xffb000], totem: 0x2a2020, charger: 0x6a2a1a,
-    gfx: { exp: 1.15, hemi: 0.62, sun: [0xffa070, 0.9], fill: [0xff5020, 0.45], fog: [25, 50], amb: 'ember', vig: 'rgba(45,6,0,.55)', hero: 0xffd0a0 },
+    gfx: { exp: 1.15, gl: 0.9, hemi: 0.62, sun: [0xffa070, 0.9], fog: [25, 50], amb: 'ember', vig: 'rgba(45,6,0,.55)', hero: 0xffd0a0 },
     boss: { name: 'The Magma Titan', kind: 'titan', body: 0x2e2421, accent: 0xff5a00, skin: 0x2e2421, eye: 0xffd000, sig: ['meteors', 'shock', 'shock'] },
   },
   {
@@ -162,7 +162,7 @@ const THEMES = [
     golem: 0x9fd0ef, cube: 0x4fe0ff, bone: 0xdff3ff, accent: 0x2aa3ff, deco: 'ice',
     pit: { c: 0x0e3a66, c2: 0x2a6aa0, glow: 0 }, slow: { c: 0xf4fbff, name: 'Deep Snow' }, pattern: 'ice', walls: 'crystal', traps: ['spike', 'vent'],
     light: 0x7fe8ff, carpet: 0x2a5a9a, carpet2: 0xdff3ff, slime: 0x8fe8ff, guard: [0x5a8ab0, 0xdff3ff], mage: [0x2a6ab0, 0xffffff], totem: 0x9fe6ff, charger: 0x7a6a5a,
-    gfx: { exp: 0.95, hemi: 0.8, sun: [0xe0f0ff, 1.0], fill: [0x60a0ff, 0.4], fog: [25, 52], amb: 'snow', vig: 'rgba(0,14,40,.5)', hero: 0xe0f4ff },
+    gfx: { exp: 0.85, gl: 0.6, hemi: 0.8, sun: [0xe0f0ff, 1.0], fog: [25, 52], amb: 'snow', vig: 'rgba(0,14,40,.5)', hero: 0xe0f4ff },
     boss: { name: 'The Frost Giant', kind: 'giant', body: 0x8fc4e8, accent: 0xffffff, skin: 0x8fc4e8, eye: 0x00e5ff, sig: ['icicles', 'icicles', 'avalanche'] },
   },
   {
@@ -171,7 +171,7 @@ const THEMES = [
     golem: 0xd8d4e4, cube: 0x8fd0ff, bone: 0xf0f0f0, accent: 0x2a5ad0, deco: 'sky',
     pit: { c: 0x6aaaf0, c2: 0xffffff, glow: 0, sky: true }, slow: { c: 0xffffff, name: 'Cloud Fluff' }, pattern: 'marble', walls: 'banner', traps: ['vent', 'plate'],
     light: 0xfff07a, carpet: 0x2a4ac0, carpet2: 0xffc72c, slime: 0xc8e8ff, guard: [0xc0c8d8, 0xffc72c], mage: [0x2a4ac0, 0xffe14a], totem: 0xe6e2ee, charger: 0x8a7ad0,
-    gfx: { exp: 0.92, hemi: 0.85, sun: [0xfff4dc, 1.15], fill: [0x9ac0ff, 0.35], fog: [32, 64], amb: 'cloud', vig: 'rgba(20,40,90,.32)' },
+    gfx: { exp: 0.78, gl: 0.35, hemi: 0.85, sun: [0xfff4dc, 1.15], fog: [32, 64], amb: 'cloud', vig: 'rgba(20,40,90,.32)' },
     boss: { name: 'The Storm Dragon', kind: 'dragon', body: 0x3a5cc8, accent: 0xffe14a, skin: 0x3a5cc8, eye: 0xffffff, sig: ['lightning', 'lightning', 'breath'] },
   },
   {
@@ -180,7 +180,7 @@ const THEMES = [
     golem: 0x6a5a80, cube: 0xd05aff, bone: 0xe8e0f0, accent: 0x3affc0, deco: 'mushroom',
     pit: { c: 0x2adf5a, c2: 0x9aff3a, glow: 1 }, slow: { c: 0x8a3ac0, name: 'Goo' }, pattern: 'moss', walls: 'glow', traps: ['vent', 'spike'],
     light: 0x5affd0, carpet: 0x6a2a8a, carpet2: 0x3affc0, slime: 0xd05aff, guard: [0x6a4a8a, 0x3affc0], mage: [0x5a1a8a, 0x3affc0], totem: 0xd02a3a, charger: 0x4a3a6a,
-    gfx: { exp: 1.15, hemi: 0.7, sun: [0xd8b0ff, 0.75], fill: [0x40ffd0, 0.45], fog: [24, 48], amb: 'spore', vig: 'rgba(20,0,36,.6)', hero: 0xf0d8ff },
+    gfx: { exp: 1.15, gl: 1, hemi: 0.7, sun: [0xd8b0ff, 0.75], fog: [24, 48], amb: 'spore', vig: 'rgba(20,0,36,.6)', hero: 0xf0d8ff },
     boss: { name: 'The Mushroom King', kind: 'mushroom', body: 0xd8243a, accent: 0xffffff, skin: 0xf0e0c0, eye: 0x222222, sig: ['spores', 'spores', 'bounce'] },
   },
   {
@@ -189,7 +189,7 @@ const THEMES = [
     golem: 0xc07a6a, cube: 0x3a3a3a, bone: 0xe8e6da, accent: 0xc0302a, deco: 'pirate',
     pit: { c: 0x135a7a, c2: 0x3aa0c0, glow: 0 }, slow: { c: 0x4a6a3a, name: 'Seaweed' }, pattern: 'planks', walls: 'cave', traps: ['plate', 'spike'],
     light: 0xffb040, carpet: 0xa0201a, carpet2: 0xffc72c, slime: 0x3ac0b0, guard: [0x2a2a3a, 0xc0302a], mage: [0x1a4a6a, 0x3dffd0], totem: 0x8a5a2a, charger: 0x3a6a8a,
-    gfx: { exp: 1.05, hemi: 0.72, sun: [0xffe0b0, 1.0], fill: [0x40c0ff, 0.4], fog: [25, 52], amb: 'mist', vig: 'rgba(0,20,32,.5)' },
+    gfx: { exp: 1, gl: 0.85, hemi: 0.72, sun: [0xffe0b0, 1.0], fog: [25, 52], amb: 'mist', vig: 'rgba(0,20,32,.5)' },
     boss: { name: 'Captain Bonebeard', kind: 'captain', body: 0x2a2a3a, accent: 0xc0302a, skin: 0xe8e6da, eye: 0x3dffd0, sig: ['cannons', 'cannons', 'anchor'] },
   },
 ];
