@@ -455,17 +455,17 @@ function updateBuffHUD() {
 // hero glow for active buffs (all players; flags from the view)
 function buffGlow(o, bf) {
   bf = bf | 0;
-  if (!bf) { if (o.glow) o.glow.visible = false; return; }
-  if (!o.glow) {
-    o.glow = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.9, 2.3, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }));
-    o.glow.position.y = 1.15; o.obj.add(o.glow);
+  if (!bf) { if (o.bglow) o.bglow.visible = false; return; }
+  if (!o.bglow) {
+    o.bglow = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.9, 2.3, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }));
+    o.bglow.position.y = 1.15; o.obj.add(o.bglow);
   }
   const k = BUFF_KEYS[Math.floor(G.time * 2) % 3];
   const on = BUFF_KEYS.filter((b, i) => bf & (1 << i));
   const show = on.includes(k) ? k : on[0];
-  o.glow.visible = true;
-  o.glow.material.color.setHex(POTIONS[show].hex);
-  o.glow.material.opacity = 0.16 + 0.08 * Math.sin(G.time * 6);
+  o.bglow.visible = true;
+  o.bglow.material.color.setHex(POTIONS[show].hex);
+  o.bglow.material.opacity = 0.16 + 0.08 * Math.sin(G.time * 6);
 }
 
 // ---------- per-frame: prompt near the stall, merchant idle animation, buffs, preview ----------
