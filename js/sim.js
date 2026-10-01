@@ -1117,12 +1117,14 @@ const Sim = (() => {
       for (const p of S.players.values()) {
         if (p.downed) continue;
         if (l.owner !== -1 && l.owner !== p.id) continue;
+        if (l.dropBy === p.id && l.t < 4) continue; // weapon a player dropped (social.js): not straight back to them
         const d = Math.hypot(p.x - l.x, p.z - l.z);
         if (l.kind === 'coin' && d < 4.5 && d > 0.8) { l.x += (p.x - l.x) / d * 14 * dt; l.z += (p.z - l.z) / d * 14 * dt; }
         if (d < 1.3) {
           if (l.kind === 'heart') { if (p.hp >= p.maxHp) continue; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25); ev('heal', p.id); }
           else if (Sim.onGrant) Sim.onGrant(p.id, l.kind === 'item' ? { item: l.item } : { coins: l.v || 1 });
           l.gone = true; ev('pick', p.id, l.kind);
+          if (l.dropBy !== undefined && Sim.onDropPick) Sim.onDropPick(p.id, l);
           break;
         }
       }
