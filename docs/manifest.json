@@ -1,0 +1,11 @@
+{
+  "name": "Desert Dungeons",
+  "short_name": "Dungeons",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1c130a",
+  "theme_color": "#1c130a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
