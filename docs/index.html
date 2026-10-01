@@ -426,6 +426,7 @@ input::placeholder { color:#8a7656; }
 #pause .big.xl { font-size:30px; }
 #gfxBtn .tl b { font-weight:400; color:#ffe58a; }
 #gfxBtn .gfxhint { font-family:var(--fb); font-weight:800; font-size:11px; color:var(--mute); letter-spacing:0; }
+#pause .row2 #gfxBtn { flex:1.35; } #pause .row2 .gfxhint { display:none; } #sunBtn .tl { white-space:nowrap; }
 
 #share .pbody { display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:center; }
 
@@ -824,7 +825,10 @@ input::placeholder { color:#8a7656; }
       <button class="tog" id="lowBtn"><span class="ti">🔋</span><span class="tl">Battery<br>saver</span><span class="sw2"></span></button>
       <button class="tog" id="sndBtn"><span class="ti">🔊</span><span class="tl">Sound</span><span class="sw2"></span></button>
     </div>
-    <button class="tog" id="gfxBtn"><span class="ti">✨</span><span class="tl">Graphics<br><b>Auto</b></span><span class="gfxhint">tap to change</span></button>
+    <div class="row2">
+      <button class="tog" id="gfxBtn"><span class="ti">✨</span><span class="tl">Graphics<br><b>Auto</b></span><span class="gfxhint">tap to change</span></button>
+      <button class="tog" id="sunBtn"><span class="ti">☀️</span><span class="tl">Sunny<br>mode</span><span class="sw2"></span></button>
+    </div>
     <button class="big gray sm" id="quitBtn">🚪 Quit to menu</button>
   </div>
 </div>
@@ -837,6 +841,7 @@ input::placeholder { color:#8a7656; }
 <script src="lib/peerjs.min.js"></script>
 <script src="net.js"></script>
 <script src="js/data.js"></script>
+<script src="js/look.js"></script>
 <script src="js/dungeon.js"></script>
 <script src="js/models.js"></script>
 <script src="js/sim.js"></script>

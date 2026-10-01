@@ -98,6 +98,7 @@ function syncVisuals(dt) {
     setWeapon(o.model, wpnW, wpnR);
     if (o.prep !== o.model.wkey) { o.prep = o.model.wkey; prepModel(o.obj); }
     if (mine && !o.glow) { o.glow = lootGlow(0xffe2c0, 6.5, 0.2); o.obj.add(o.glow); } // soft light pool around the local hero
+    if (o.glow && o.glowK !== (GFX.L && GFX.L.heroPool)) { o.glowK = GFX.L && GFX.L.heroPool; o.glow.scale.setScalar(6.5 * Math.sqrt((o.glowK || 0.2) / 0.2)); }
     let f = mine ? me.f : (p.atk ? p.aim : p.f);
     o.f = lerpAngle(o.f, f, Math.min(1, dt * 18));
     o.obj.position.set(o.x, 0, o.z);
@@ -432,7 +433,10 @@ function prepModel(root) {
   root.traverse(n => {
     if (!n.isMesh || !n.material) return;
     const m = n.material;
-    if (m.isMeshLambertMaterial) n.castShadow = Math.max(n.scale.x, n.scale.y, n.scale.z) >= 0.25; // tiny bits (eyes, trims) don't cast
+    if (m.isMeshLambertMaterial) {
+      n.castShadow = Math.max(n.scale.x, n.scale.y, n.scale.z) >= 0.25; // tiny bits (eyes, trims) don't cast
+      if (typeof lookCharMat === 'function') lookCharMat(m); // rim light + ambient lift (look.js): heroes/enemies pop in dark worlds
+    }
     else if (m.isMeshBasicMaterial && m !== SHADOW_MAT && m.toneMapped) { m.toneMapped = false; m.needsUpdate = true; }
   });
 }
@@ -447,7 +451,7 @@ function lootGlow(color, size, inten) {
   g.rotation.x = -Math.PI / 2; g.position.y = 0.06; g.scale.setScalar(size); g.renderOrder = 2;
   return g;
 }
-const _ld = SUN_OFF.clone().normalize(), _lr = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), _ld).normalize(), _lu = new THREE.Vector3().crossVectors(_ld, _lr);
+const _ld = SUN_BASIS.d, _lr = SUN_BASIS.r, _lu = SUN_BASIS.u; // light-space basis (core.js aimSun, per world)
 const _lt = new THREE.Vector3();
 let lightPickT = 0, ambT = 0, lastLevel = null, shadowTick = 0;
 function updateLights(dt) {

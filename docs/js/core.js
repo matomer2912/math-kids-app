@@ -65,12 +65,17 @@ const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(-10, 25,
 // Light from the west, a little from the camera side, ~45° up: shadows fall to the right where they are
 // visible (not hidden behind the characters) and fronts still catch some light.
 const SUN_OFF = new THREE.Vector3(-15, 17, 4);
-{ // size the orthographic shadow box to cover ~44 x 26 world units of floor around the view focus
-  const d = SUN_OFF.clone().normalize(), r = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), d).normalize(), u = new THREE.Vector3().crossVectors(d, r);
+// light-space basis (d: towards the sun, r/u: shadow-map axes); updated with the per-world sun direction
+const SUN_BASIS = { d: new THREE.Vector3(), r: new THREE.Vector3(), u: new THREE.Vector3() };
+function aimSun(dir) { // size the orthographic shadow box to cover ~44 x 26 world units of floor around the view focus
+  if (dir) SUN_OFF.set(dir[0], dir[1], dir[2]).setLength(Math.hypot(15, 17, 4));
+  const d = SUN_BASIS.d.copy(SUN_OFF).normalize(), r = SUN_BASIS.r.crossVectors(new THREE.Vector3(0, 1, 0), d).normalize(), u = SUN_BASIS.u.crossVectors(d, r);
   const hx = 22, hz = 13, hy = 3;
   const sr = Math.abs(r.x) * hx + Math.abs(r.z) * hz + Math.abs(r.y) * hy, su = Math.abs(u.x) * hx + Math.abs(u.z) * hz + Math.abs(u.y) * hy;
   Object.assign(sun.shadow.camera, { left: -sr, right: sr, top: su, bottom: -su, near: 2, far: 70 });
+  sun.shadow.camera.updateProjectionMatrix();
 }
+aimSun();
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
 // soft light that follows the local hero (High only; lower tiers get a fake glow pool)
 const heroLight = new THREE.PointLight(0xffe6c8, 0.55, 10, 1.5); heroLight.position.set(0, 3.2, 0);
@@ -152,19 +157,48 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-// per-world lighting: exposure, light colours, fog, background, CSS vignette tint
-const GFX_DEF = { exp: 1.0, hemi: 0.8, sun: [0xfff2dd, 1.0], fog: [26, 50], amb: 'dust', vig: 'rgba(0,0,0,.5)' };
+// per-world lighting / mood: exposure, light colours + sun direction, fog + haze, ground mist, dappled sun,
+// character rim light, CSS vignette. All values come from theme.gfx (data.js), so a world's mood is data.
+// "Sunny" mode (pause menu) lifts exposure, ambient fill and shadows for playing in bright sunlight while
+// keeping each world's colours.
+const GFX_DEF = { exp: 1.0, hemi: 0.8, sun: [0xfff2dd, 1.0], fog: [26, 50], amb: 'dust', vig: 'rgba(0,0,0,.5)', sunDir: [-15, 17, 4], mist: [0, -1.5, 0.8, 0x808080],
+  dapple: 0, rim: [0xc8d8ff, 0.3, 0.06], heroPool: 0.2 };
+let sunny = false;
+try { sunny = localStorage.getItem('dd_sunny') === '1'; } catch (e) { }
+const SUNNY = { exp: 1.32, hemi: 1.75, sun: 1.15, fog: 1.25, mist: 0.55, vig: 0.45, rim: 1.2 };
 function applyThemeLighting(T) {
   const L = Object.assign({}, GFX_DEF, T.gfx || {});
-  scene.background = new THREE.Color(T.voidc);
-  scene.fog = new THREE.Fog(T.voidc, L.fog[0], L.fog[1]);
-  hemi.color.setHex(T.hemi); hemi.groundColor.setHex(T.ground); hemi.intensity = L.hemi;
-  sun.color.setHex(L.sun[0]); sun.intensity = L.sun[1];
+  const S = sunny ? SUNNY : null;
+  scene.background = new THREE.Color(L.bg !== undefined ? L.bg : T.voidc);
+  if (S) scene.background.lerp(new THREE.Color(L.fogc !== undefined ? L.fogc : T.voidc), 0.5);
+  const fog = S ? [L.fog[0] * S.fog, L.fog[1] * S.fog] : L.fog;
+  scene.fog = new THREE.Fog(L.fogc !== undefined ? L.fogc : T.voidc, fog[0], fog[1]);
+  hemi.color.setHex(L.sky !== undefined ? L.sky : T.hemi); hemi.groundColor.setHex(L.gnd !== undefined ? L.gnd : T.ground); hemi.intensity = L.hemi * (S ? S.hemi : 1);
+  if (S) hemi.groundColor.lerp(hemi.color, 0.3);
+  sun.color.setHex(L.sun[0]); sun.intensity = L.sun[1] * (S ? S.sun : 1);
+  aimSun(L.sunDir);
   heroLight.color.setHex(L.hero || 0xffe6c8);
-  renderer.toneMappingExposure = L.exp;
-  document.documentElement.style.setProperty('--vig', L.vig);
-  GFX.L = L;
+  renderer.toneMappingExposure = L.exp * (S ? S.exp : 1);
+  const vig = S ? L.vig.replace(/,\s*([\d.]+)\)$/, (m, a) => ',' + (+a * S.vig).toFixed(2) + ')') : L.vig;
+  document.documentElement.style.setProperty('--vig', vig);
+  if (typeof LOOK_U !== 'undefined') { // look.js shared uniforms (level materials + characters)
+    const LK = typeof lookOf === 'function' ? lookOf(T) : {};
+    LOOK_U.uLkMist.value.set(L.mist[0] * (S ? S.mist : 1), L.mist[1], L.mist[2], 0); LOOK_U.uLkMistC.value.setHex(L.mist[3]);
+    LOOK_U.uLkCookie.value.set(L.dapple * (S ? 0.7 : 1), 0.055, 0.6, 0);
+    LOOK_U.uLkAO.value.set((LK.ao || 0.5) * (S ? 0.75 : 1), LK.aoR || 0.42, LK.side || 0.86, LK.base || 0.62);
+    LOOK_U.uLkRim.value.set(L.rim[1] * (S ? S.rim : 1), L.rim[2], 0, 0); LOOK_U.uLkRimC.value.setHex(L.rim[0]);
+  }
+  GFX.L = Object.assign(L, { fog });
+  if (typeof onGfxChange === 'function') onGfxChange();
 }
+function setSunny(on) {
+  sunny = !!on;
+  try { localStorage.setItem('dd_sunny', sunny ? '1' : '0'); } catch (e) { }
+  if (G.theme) applyThemeLighting(G.theme);
+  sunLabel();
+}
+function sunLabel() { const b = $('sunBtn'); if (b) b.classList.toggle('on', sunny); }
+if ($('sunBtn')) { $('sunBtn').onclick = () => setSunny(!sunny); sunLabel(); }
 
 // ---------- game state ----------
 const G = { role: null, inGame: false, floor: 1, seed: 0, map: null, level: null, theme: THEMES[0], myId: 0, view: null, snap: null, paused: false, time: 0, shake: 0, startFloor: 1, banner: 0 };

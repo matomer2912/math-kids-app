@@ -372,12 +372,15 @@ const _m4 = new THREE.Matrix4(), _col = new THREE.Color(), _q = new THREE.Quater
 // meshes by geometry bounds only). Flat pieces (floor tiles, carpets) only receive shadows; tall ones
 // (walls, statues, props) cast and receive.
 const CHUNK = 20;
+// opt.tex: the batch uses the look atlas material (look.js): add() then takes `tex` (tile index for
+// all faces, or [topTile, sideTile, cornerBits, topRotation]) and `ao` ([N, E, S, W] wall contact on a
+// floor tile, 0..1) as 10th / 11th arguments; both are optional (tile 0 = untextured).
 function BoxBatch(mat, opt) {
   const list = [];
-  const shadow = !!(opt && opt.shadow);
+  const shadow = !!(opt && opt.shadow), tex = !!(opt && opt.tex);
   return {
     list,
-    add(color, sx, sy, sz, x, y, z, ry, vary) { list.push([color, sx, sy, sz, x, y, z, ry || 0, vary || 0]); },
+    add(color, sx, sy, sz, x, y, z, ry, vary, t, ao) { list.push([color, sx, sy, sz, x, y, z, ry || 0, vary || 0, t || 0, ao || null]); },
     build(grp, rng) {
       if (!list.length) return null;
       const groups = new Map();
@@ -391,15 +394,23 @@ function BoxBatch(mat, opt) {
       for (const g of groups.values()) {
         const geo = BOXG.clone();
         const m = new THREE.InstancedMesh(geo, mat, g.list.length);
+        const at = tex ? new Float32Array(g.list.length * 4) : null, aa = tex ? new Float32Array(g.list.length * 4) : null;
         let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
         g.list.forEach((b, n) => {
           _q.setFromAxisAngle(_up, b[7]); _s3.set(b[1], b[2], b[3]); _v3.set(b[4], b[5], b[6]);
           _m4.compose(_v3, _q, _s3); m.setMatrixAt(n, _m4);
           _col.setHex(b[0]); if (b[8] && rng) _col.offsetHSL(0, 0, (rng() - 0.5) * b[8]);
           m.setColorAt(n, _col);
+          if (tex) {
+            const t = b[9];
+            if (Array.isArray(t)) { at[n * 4] = t[0]; at[n * 4 + 1] = t[1] === undefined ? t[0] : t[1]; at[n * 4 + 2] = t[2] || 0; at[n * 4 + 3] = t[3] || 0; }
+            else at[n * 4] = at[n * 4 + 1] = t;
+            if (b[10]) for (let k = 0; k < 4; k++) aa[n * 4 + k] = b[10][k];
+          }
           const r = 0.5 * Math.hypot(b[1], b[2], b[3]);
           x0 = Math.min(x0, b[4] - r); x1 = Math.max(x1, b[4] + r); y0 = Math.min(y0, b[5] - r); y1 = Math.max(y1, b[5] + r); z0 = Math.min(z0, b[6] - r); z1 = Math.max(z1, b[6] + r);
         });
+        if (tex) { geo.setAttribute('aTex', new THREE.InstancedBufferAttribute(at, 4)); geo.setAttribute('aAO', new THREE.InstancedBufferAttribute(aa, 4)); }
         geo.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), 0.5 * Math.hypot(x1 - x0, y1 - y0, z1 - z0));
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
         m.frustumCulled = true; // r149 InstancedMesh defaults to false
@@ -416,9 +427,11 @@ const mix = (a, b, t) => { const c = n => Math.round(((a >> n) & 255) * (1 - t) 
 
 // Level surfaces skip the point-light loop (the point-light pool lights characters/props only; floors and
 // walls get the cheap glow decals instead). Point lights are per-fragment in r149 Lambert, and the level
-// covers ~90% of the screen, so this keeps the real lights almost free.
+// covers ~90% of the screen, so this keeps the real lights almost free. With look.js loaded, level
+// materials also get the per-world ground mist and the dappled-sun cookie (shared uniforms, one program).
 const LVL_LIGHTS = THREE.ShaderChunk.lights_fragment_begin.replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0');
 function levelMat(m) {
+  if (typeof lookPatch === 'function') { m.onBeforeCompile = sh => lookPatch(sh, false); m.customProgramCacheKey = () => 'lvl'; return m; }
   m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', LVL_LIGHTS); };
   m.customProgramCacheKey = () => 'lvl';
   return m;
@@ -501,7 +514,7 @@ function buildAmbient(grp, theme) {
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 2));
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
-  const c1 = new THREE.Color(A.c), c2 = new THREE.Color(A.c2 || A.c);
+  const ac = theme.gfx && theme.gfx.ambC, c1 = new THREE.Color(ac || A.c), c2 = new THREE.Color(ac ? (A.c2 ? mix(ac, A.c2, 0.5) : ac) : (A.c2 || A.c));
   const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uScale: { value: 400 }, uFogF: { value: 50 },
       uVel: { value: new THREE.Vector3().fromArray(A.v) }, uSize: { value: A.s * A.n }, uSway: { value: A.sw }, uA: { value: A.a },
@@ -545,7 +558,7 @@ function buildLevel(map, theme) {
   const grp = new THREE.Group();
   const { W, H, g, tt } = map;
   const rng = RNG(map.seed ^ 0x9e3779b9);
-  const L = BoxBatch(levelMat(new THREE.MeshLambertMaterial()), { shadow: true }); // lit static boxes (walls/props cast shadows)
+  const L = BoxBatch(typeof lookLitMat === 'function' ? lookLitMat() : levelMat(new THREE.MeshLambertMaterial()), { shadow: true, tex: true }); // lit static boxes (walls/props cast shadows), atlas-textured
   const E = BoxBatch(new THREE.MeshBasicMaterial({ toneMapped: false })); // glowing static boxes (not tone mapped = they pop)
   const A = BoxBatch(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })); // translucent overlays
   const anim = { spikes: [], vents: [], glow: [], torches: null, shrine: [], clouds: [] };
@@ -560,36 +573,48 @@ function buildLevel(map, theme) {
   const glow = (k, x, y, z, sx, sy, c, i, fl) => glows.push({ k, x, y, z, sx, sy, c, i, fl: fl === undefined ? 0.1 : fl, ph: (glows.length * 2.399) % 6.283 });
   const light = (x, y, z, c, i, d) => lights.push({ x, y, z, c, i, d });
 
+  // ---- look (look.js): per-theme surface textures, baked AO, palette ----
+  const LK = typeof lookOf === 'function' ? lookOf(theme) : { floor: [], corr: [], bright: 1, topVar: 0, rubble: 0 };
+  const TL = n => typeof lookTile === 'function' ? lookTile(n) : 0;
+  const tFloor = LK.floor.map(TL), tCorr = LK.corr.map(TL), tPatch = LK.patch ? TL(LK.patch) : -1, tCliff = TL(LK.cliff);
+  const isW = (i, j) => at(i, j) === T_WALL;
+  // walls on the N/E/S/W sides of a floor tile + inner-corner bits (NE 1, SE 2, SW 4, NW 8) for the AO shader
+  const aoOf = (i, j) => [isW(i, j - 1) ? 1 : 0, isW(i + 1, j) ? 1 : 0, isW(i, j + 1) ? 0.6 : 0, isW(i - 1, j) ? 1 : 0];
+  const cornerOf = (i, j) => (isW(i + 1, j - 1) ? 1 : 0) + (isW(i + 1, j + 1) ? 2 : 0) + (isW(i - 1, j + 1) ? 4 : 0) + (isW(i - 1, j - 1) ? 8 : 0);
+  const pick = (arr, h) => arr.length ? arr[Math.min(arr.length - 1, Math.floor(h * arr.length))] : 0;
+
   // ---- floor tiles ----
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const k = j * W + i, v = g[k];
     if (v !== T_FLOOR && v !== T_SOLID) continue;
     const x = (i + 0.5) * TILE, z = (j + 0.5) * TILE;
     const r = roomOf(k), kind = r ? r.kind : 'corr';
-    let c = ((i + j) & 1) ? theme.floor : theme.floor2, vary = 0.05, gap = 0.98;
+    // no checkerboard: soft per-tile + large-scale variation between the two floor colours
+    let c = mix(theme.floor, theme.floor2, Math.min(1, hash(i, j) * 0.6 + blob(i, j, 4) * 0.5)), vary = 0.05, gap = 1.0;
+    let ft = (kind === 'corr' ? pick(tCorr, hash(i + 3, j + 7)) : pick(tFloor, hash(i + 3, j + 7)));
+    if (tPatch >= 0 && blob(i + 5, j + 9, 3) > 1 - LK.patchP) ft = tPatch;
     switch (theme.pattern) {
-      case 'slabs': c = (((i >> 1) + (j >> 1)) & 1) ? theme.floor : theme.floor2; gap = 0.94; break;
-      case 'cracks': c = mix(theme.floor, theme.floor2, hash(i, j)); vary = 0.03; gap = 1.0; break;
-      case 'moss': c = blob(i, j, 3) > 0.62 ? mix(theme.floor, deco === 'mushroom' ? 0x2fbfa0 : 0x4f8a2a, 0.55) : (((i + j) & 1) ? theme.floor : theme.floor2); gap = 0.95; break;
-      case 'basalt': c = hash(i, j) < 0.5 ? theme.floor : theme.floor2; gap = 0.9; break;
-      case 'ice': c = blob(i, j, 4) > 0.55 ? mix(theme.floor, 0xffffff, 0.35) : theme.floor; vary = 0.03; gap = 0.99; break;
-      case 'marble': c = ((i + j) & 1) ? theme.floor : theme.floor2; gap = 0.97; break;
+      case 'moss': if (blob(i, j, 3) > 0.62) c = mix(c, deco === 'mushroom' ? 0x2fbfa0 : 0x4f8a2a, LK.patch ? 0.25 : 0.55); break;
+      case 'ice': c = blob(i, j, 4) > 0.55 ? mix(theme.floor, 0xffffff, 0.35) : theme.floor; vary = 0.03; break;
+      case 'marble': c = ((i + j) & 1) ? theme.floor : theme.floor2; break;
       case 'planks': c = mix(theme.floor, theme.floor2, hash(0, j) * 0.8 + hash(i >> 1, j) * 0.2); vary = 0.06; break;
     }
     if (kind === 'corr' && theme.pattern !== 'planks') c = shade(c, 0.93);
-    if (kind === 'vault') c = ((i + j) & 1) ? 0xd9b23a : 0xc49a2a;
+    if (kind === 'vault') { c = ((i + j) & 1) ? 0xd9b23a : 0xc49a2a; ft = TL('tiles'); }
     if (kind === 'traps') c = shade(c, 0.85);
-    if (tt[k] === TT_SHRINE) c = ((i + j) & 1) ? 0xbfe8ff : 0x8fd0f0;
+    if (tt[k] === TT_SHRINE) { c = ((i + j) & 1) ? 0xbfe8ff : 0x8fd0f0; ft = TL('temple'); }
+    c = shade(c, LK.bright);
+    const rot = LK.norot ? 0 : Math.floor(hash(i + 11, j + 4) * 4);
+    const tx = [ft, ft, cornerOf(i, j), rot], ao = aoOf(i, j);
     // tiles next to a pit become tall cliff blocks so the chasm reads as deep
     let cliff = false;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (at(i + dx, j + dy) === T_PIT) cliff = true;
-    if (cliff) L.add(c, TILE * gap, 3.0, TILE * gap, x, -1.5, z, 0, vary);
-    else L.add(c, TILE * gap, 0.3, TILE * gap, x, -0.15, z, 0, vary);
+    if (cliff) { tx[1] = tCliff; L.add(c, TILE * gap, 3.0, TILE * gap, x, -1.5, z, 0, vary, tx, ao); }
+    else L.add(c, TILE * gap, 0.3, TILE * gap, x, -0.15, z, 0, vary, tx, ao);
     // pattern details
-    if (theme.pattern === 'cracks' && hash(i + 7, j) < 0.12) { L.add(shade(c, 0.75), 1.1, 0.02, 0.08, x, 0.01, z, hash(i, j + 3) * 3); L.add(shade(c, 0.75), 0.6, 0.02, 0.08, x + 0.3, 0.01, z + 0.2, hash(i, j + 5) * 3); }
+    if (false && theme.pattern === 'cracks' && hash(i + 7, j) < 0.12) { L.add(shade(c, 0.75), 1.1, 0.02, 0.08, x, 0.01, z, hash(i, j + 3) * 3); L.add(shade(c, 0.75), 0.6, 0.02, 0.08, x + 0.3, 0.01, z + 0.2, hash(i, j + 5) * 3); }
     if (theme.pattern === 'basalt' && hash(i + 3, j + 1) < 0.1) E.add(0xff6a00, 1.2, 0.02, 0.08, x, 0.01, z, hash(i, j) * 3);
     if (theme.pattern === 'marble' && (i % 4 === 0 && j % 4 === 0)) L.add(0xffc72c, 0.4, 0.02, 0.4, x, 0.01, z, 0.785);
-    if (theme.pattern === 'planks') L.add(shade(c, 0.7), TILE, 0.02, 0.06, x, 0.01, z - TILE * 0.49 + (j & 1) * 0.02);
     if (theme.pattern === 'ice' && hash(i, j + 9) < 0.05) L.add(0xffffff, 0.9, 0.02, 0.05, x, 0.01, z, hash(i + 1, j) * 3);
     // puddles
     if ((deco === 'jungle' || deco === 'crypt' || deco === 'pirate') && !tt[k] && v === T_FLOOR && blob(i + 11, j + 5, 2) > 0.8 && hash(i, j + 1) < 0.6) A.add(deco === 'jungle' ? 0x3a8a9a : 0x5a7a9a, 1.7, 0.02, 1.5, x, 0.02, z, hash(i, j) * 0.5);
@@ -612,7 +637,8 @@ function buildLevel(map, theme) {
         A.add(0xffffff, 0.06, 0.03, 2.0, x, 0.03, z, 0); A.add(0xffffff, 2.0, 0.03, 0.06, x, 0.03, z, 0);
         L.add(0x9a9aa8, 2.0, 0.015, 2.0, x, 0.006, z);
       } else {
-        L.add(sc, TILE, 0.04, TILE, x, 0.02, z, 0, 0.06);
+        const stl = TL(deco === 'desert' ? 'sand' : deco === 'ice' || deco === 'sky' ? 'plain' : 'mud');
+        L.add(sc, TILE, 0.04, TILE, x, 0.02, z, 0, 0.06, [stl, stl, 0, Math.floor(hash(i, j + 5) * 4)]);
         if (hash(i, j + 2) < 0.5) L.add(shade(sc, deco === 'ice' || deco === 'sky' ? 0.92 : 1.25), 0.7, 0.12, 0.6, x + (hash(i, j) - 0.5), 0.06, z + (hash(j, i) - 0.5), hash(i, j) * 3);
         if (deco === 'pirate') for (let s = 0; s < 3; s++) L.add(0x2f6a2a, 0.1, 0.5, 0.1, x + (hash(i + s, j) - 0.5) * 1.4, 0.25, z + (hash(i, j + s) - 0.5) * 1.4);
       }
@@ -648,7 +674,12 @@ function buildLevel(map, theme) {
   }
 
   // ---- walls ----
-  const WH = 2.0;
+  // Ruins, not boxes: textured sides (darker at the base via the AO shader), wall tops of varying height
+  // with broken caps and rubble, optional moss lips (jungle). Deterministic from the seed (own RNG so the
+  // rest of the level is unchanged); collision is untouched (it only reads map.g).
+  const WH = 2.0, wr = RNG((map.seed ^ 0x5eedb10c) >>> 0);
+  const tWall = TL(LK.wall), tAlt = LK.wallAlt ? TL(LK.wallAlt) : -1, tTop = TL(LK.top), tRub = TL(LK.rubbleT || LK.top);
+  const lipC = LK.lip, tLip = TL(LK.lipT || 'grassTop');
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const k = j * W + i;
     if (g[k] !== T_WALL) continue;
@@ -658,14 +689,32 @@ function buildLevel(map, theme) {
     const x = (i + 0.5) * TILE, z = (j + 0.5) * TILE;
     let hh = WH + (rng() < 0.15 ? 0.3 : 0);
     const st = theme.walls;
+    // walls with floor to the north sit between the camera and the room: never raise those
+    const camSide = walk(i, j - 1);
+    if (LK.topVar && !camSide) hh = WH + Math.floor(hash(i * 3 + 1, j * 5 + 2) * 3) * LK.topVar * 0.5 + (hash(i + 9, j + 4) < 0.12 ? LK.topVar : 0);
     if (st === 'cave' || st === 'glow') hh = 1.6 + hash(i, j) * 1.1;
     if (st === 'basalt') hh = 1.8 + Math.floor(hash(i, j) * 3) * 0.3;
     // lowered, broken wall segments on walls facing the camera keep the view open
     const front = at(i, j + 1) === T_FLOOR;
     if (front && st !== 'cave' && hash(i + 5, j) < 0.06) hh = 0.9;
-    const wc = st === 'brick' && ((i + (j & 1)) & 1) ? shade(theme.wall, 0.94) : theme.wall;
-    L.add(wc, TILE, hh, TILE, x, hh / 2, z, 0, 0.08);
-    L.add(theme.top, TILE * 1.001, 0.12, TILE * 1.001, x, hh + 0.06, z, 0, 0.05);
+    const wc0 = st === 'brick' && ((i + (j & 1)) & 1) ? shade(theme.wall, 0.94) : theme.wall;
+    const wc = shade(mix(wc0, shade(wc0, 0.82), hash(i + 2, j + 3)), LK.bright);
+    const ws = tAlt >= 0 && hash(i + 7, j + 1) < LK.altP ? tAlt : tWall;
+    const tc = shade(theme.top, LK.bright);
+    const chipped = LK.rubble && wr() < LK.rubble;
+    L.add(wc, TILE, hh, TILE, x, hh / 2, z, 0, 0.08, [tTop, ws]);
+    if (!chipped) L.add(tc, TILE * 1.001, 0.12, TILE * 1.001, x, hh + 0.06, z, 0, 0.05, [tTop, tTop, 0, Math.floor(wr() * 4)]);
+    else { // broken cap: a partial slab and a fallen block on the wall top
+      const ox = (wr() - 0.5) * 0.7, oz = (wr() - 0.5) * 0.7, rc = LK.rubbleC || theme.top;
+      L.add(tc, TILE * (0.55 + wr() * 0.3), 0.12, TILE * (0.55 + wr() * 0.3), x + ox, hh + 0.06, z + oz, 0, 0.05, [tTop, tTop, 0, Math.floor(wr() * 4)]);
+      const s = 0.45 + wr() * 0.45; L.add(shade(rc, LK.bright * (0.85 + wr() * 0.3)), s, s * 0.7, s, x - ox * 0.8, hh + s * 0.35, z - oz * 0.8, wr() * 1.5, 0.06, [tRub, tRub]);
+      if (wr() < 0.5) { const s2 = 0.25 + wr() * 0.25; L.add(shade(rc, LK.bright), s2, s2, s2, x + (wr() - 0.5) * 1.2, hh + s2 / 2, z + (wr() - 0.5) * 1.2, wr() * 3, 0.06, [tRub, tRub]); }
+    }
+    // moss lip hanging over the visible (south) face of the wall top
+    if (lipC && front && hh > 1 && hash(i + 1, j + 8) < LK.lipP) {
+      const lh = 0.25 + hash(i, j + 2) * 0.35, lw = TILE * (0.6 + hash(i + 3, j) * 0.42);
+      L.add(shade(lipC, 0.9 + hash(i, j) * 0.2), lw, lh, 0.14, x + (hash(i + 4, j) - 0.5) * (TILE - lw), hh - lh / 2 + 0.1, z + 1.02, 0, 0.06, [tLip, tLip]);
+    }
     if (st === 'brick' && front) { L.add(shade(theme.wall, 0.8), TILE * 1.002, 0.08, 0.04, x, 0.7, z + 1.0); L.add(shade(theme.wall, 0.8), TILE * 1.002, 0.08, 0.04, x, 1.4, z + 1.0); }
     if (st === 'basalt' && front && hash(i, j + 1) < 0.2) { E.add(0xff5a00, 0.08, hh * 0.7, 0.04, x + (hash(i, j) - 0.5) * 1.2, hh * 0.4, z + 1.01); glow(1, x, hh * 0.45, z + 1.03, 1.6, 1.8, 0xff5a00, 0.3, 0.05); }
   }
@@ -903,4 +952,5 @@ function animateLevel(level, t) {
   for (const gem of A.shrine) { gem.rotation.y = t * 1.5; gem.position.y = 1.9 + 0.15 * Math.sin(t * 2); if (gem.userData.ring) gem.userData.ring.material.opacity = 0.35 + 0.25 * Math.sin(t * 3); }
   for (let n = 0; n < A.clouds.length; n++) { const c = A.clouds[n]; c.position.x += Math.sin(t * 0.3 + n) * 0.004; }
   if (level.userData.glow) level.userData.glow.material.uniforms.uTime.value = t % 1000;
+  if (typeof LOOK_U !== 'undefined') LOOK_U.uLkTime.value = t % 1000; // ground mist drift, canopy sway (look.js)
 }

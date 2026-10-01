@@ -121,6 +121,20 @@ const NEW_MOBS = { slime: 'slime', charger: 'charger', shield: 'guard', bomber: 
 //  pit: non-walkable chasm / lava / water look   slow: sticky floor patches (slows everyone)
 //  pattern: floor tiles   walls: wall decoration style   traps: which traps appear   light: torch flame color
 //  boss.sig: the boss's signature attacks (added to the shared slam/stomp/charge/spray/summon set)
+//  gfx (mood, read by applyThemeLighting in core.js; every field optional, see GFX_DEF):
+//    exp tone-mapping exposure · hemi ambient fill intensity · sky/gnd ambient sky/ground colours (default
+//    hemi/ground) · sun [colour, intensity] · sunDir sun/moon direction (x west-east, y up, z north-south)
+//    fog [near, far] · fogc fog / haze colour (default voidc) · bg background (default voidc)
+//    mist [density, y fully misty, y mist-free, colour] ground mist pooled in pits and drifting over floors
+//    dapple 0..1 leaf-shadow pattern on the sun light · rim [colour, strength, lift] character rim light
+//    gl glow-decal gain · amb/ambC ambient particle kind / colour · vig CSS vignette · hero hero light colour
+//    heroPool hero light-pool strength
+//  look (surface treatment, read by look.js lookOf/buildLevel; every field optional, see LOOK_DEF):
+//    floor/corr tile names for rooms / corridors · patch + patchP big blob patches · wall, wallAlt + altP
+//    wall sides · top wall tops · cliff pit cliffs · rubble chance of broken wall tops · rubbleT/rubbleC
+//    their tile/colour · topVar wall-top height variation · lip + lipP moss overhang colour / chance
+//    ao contact-shadow strength · aoR its radius · side side-face brightness · base wall-base darkening
+//    bright texture brightness compensation · norot keep floor tiles unrotated
 const THEMES = [
   {
     name: 'Desert Tomb', floor: 0xd8b878, floor2: 0xc9a663, wall: 0xa7814b, top: 0xe3c890, voidc: 0x2b1d10, hemi: 0xfff0cc, ground: 0x6b4a22,
@@ -132,21 +146,29 @@ const THEMES = [
     boss: { name: 'The Sand Pharaoh', kind: 'pharaoh', body: 0xe0b44a, accent: 0x2457c5, skin: 0x9a6b3a, eye: 0x3dffd0, sig: ['spiral', 'spiral', 'raise'] },
   },
   {
-    name: 'Bone Crypt', floor: 0x6d6f78, floor2: 0x5e6069, wall: 0x45474f, top: 0x7b7e88, voidc: 0x0d0e14, hemi: 0xc9d6ff, ground: 0x22242c,
+    name: 'Bone Crypt', floor: 0x7a7a7e, floor2: 0x67686e, wall: 0x6a6b72, top: 0xa4a5aa, voidc: 0x07090e, hemi: 0xc9d6ff, ground: 0x22242c,
     mobs: Object.assign({ grunt: 'skeleton', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0x7d8088, cube: 0x58c43a, bone: 0xe9e9e0, accent: 0x7a3cc2, deco: 'crypt',
     pit: { c: 0x07060c, c2: 0x3a1a60, glow: 0 }, slow: { c: 0xd8d8e0, name: 'Cobwebs', web: true }, pattern: 'slabs', walls: 'bone', traps: ['spike', 'plate'],
-    light: 0xb08aff, carpet: 0x8a1a2a, carpet2: 0xc9a227, slime: 0x7dffb0, guard: [0xd8d8d0, 0x7a3cc2], mage: [0x3a1a6a, 0x9a6aff], totem: 0xe9e9e0, charger: 0x55585f,
-    gfx: { exp: 1.15, gl: 1, hemi: 0.7, sun: [0xb8c6ff, 0.8], fog: [24, 48], amb: 'wisp', vig: 'rgba(8,0,28,.6)' },
+    light: 0x3dffc0, carpet: 0x6a1622, carpet2: 0xa8862a, slime: 0x7dffb0, guard: [0xd8d8d0, 0x7a3cc2], mage: [0x3a1a6a, 0x9a6aff], totem: 0xe9e9e0, charger: 0x55585f,
+    // dark & moody: cold blue-grey moonlight from the back-left, teal soul-fire, mist pooled low
+    gfx: { exp: 1.0, gl: 1.5, hemi: 0.4, sky: 0x8ea6dc, gnd: 0x10141e, sun: [0xa8c0ff, 0.62], sunDir: [-13, 19, -5], fog: [21, 46], fogc: 0x0c121c, bg: 0x06080d,
+      mist: [0.6, -2.6, 0.9, 0x4e6688], amb: 'wisp', ambC: 0x7dffd8, vig: 'rgba(0,6,22,.62)', rim: [0x9ab8ff, 0.6, 0.1], hero: 0xffe2bc, heroPool: 0.3 },
+    look: { floor: ['slab', 'slab', 'slabCrack', 'bones'], corr: ['cobble', 'cobble', 'slabCrack'], wall: 'brick', wallAlt: 'cryptWall', altP: 0.22, top: 'boneTop', rubbleT: 'rubble',
+      rubbleC: 0xd6d2c2, cliff: 'rock', topVar: 0.4, rubble: 0.28, ao: 0.75, aoR: 0.45, bright: 1.12 },
     boss: { name: 'The Skeleton King', kind: 'skelking', body: 0xe8e6da, accent: 0x7a1fc2, skin: 0xe8e6da, eye: 0xff2a2a, sig: ['bonewall', 'bonewall', 'raise'] },
   },
   {
-    name: 'Jungle Temple', floor: 0x7d8f62, floor2: 0x6e8055, wall: 0x56693f, top: 0x86a35a, voidc: 0x0b1a0c, hemi: 0xeaffd8, ground: 0x24401a,
+    name: 'Jungle Temple', floor: 0x9a9070, floor2: 0x7c7c5e, wall: 0x7c7e66, top: 0xa4ae86, voidc: 0x07120b, hemi: 0xeaffd8, ground: 0x24401a,
     mobs: Object.assign({ grunt: 'lizard', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0x6f8060, cube: 0x3fbf3a, bone: 0xe0dcc0, accent: 0x1f9a5a, deco: 'jungle',
     pit: { c: 0x1a4a44, c2: 0x2f7a6a, glow: 0 }, slow: { c: 0x5a4126, name: 'Mud' }, pattern: 'moss', walls: 'vine', traps: ['plate', 'spike'],
     light: 0xffb63a, carpet: 0x8a5a2a, carpet2: 0xd0a040, slime: 0x6ad83a, guard: [0x3a8a3a, 0xd0a040], mage: [0x1f6a3a, 0xff7a2a], totem: 0x9a6a3a, charger: 0x6a4a2a,
-    gfx: { exp: 1, gl: 0.8, hemi: 0.72, sun: [0xfff0c0, 1.1], fog: [25, 50], amb: 'leaf', vig: 'rgba(0,24,6,.5)' },
+    // dark & moody: warm sun flecks through the canopy, teal shadows, humid haze, warm braziers
+    gfx: { exp: 0.98, gl: 1.35, hemi: 0.4, sky: 0x6fae9c, gnd: 0x142218, sun: [0xffd890, 1.3], sunDir: [-11, 21, 6], dapple: 0.9, fog: [21, 47], fogc: 0x0f2219, bg: 0x06100a,
+      mist: [0.45, -2.0, 0.9, 0x3f6a5a], amb: 'leaf', vig: 'rgba(0,16,6,.56)', rim: [0xffe6b8, 0.55, 0.1], heroPool: 0.26 },
+    look: { floor: ['slab', 'temple', 'slabCrack', 'slab', 'temple'], corr: ['dirt', 'roots', 'dirt'], patch: 'mossFloor', patchP: 0.38, wall: 'templeWall', wallAlt: 'vineWall', altP: 0.5,
+      top: 'grassTop', rubbleT: 'rubble', rubbleC: 0x8a8a70, cliff: 'rock', topVar: 0.45, rubble: 0.22, lip: 0x4a7a30, lipP: 0.55, ao: 0.72, aoR: 0.45, bright: 1.1 },
     boss: { name: 'The Spider Queen', kind: 'spider', body: 0x2a2030, accent: 0xc02060, skin: 0x2a2030, eye: 0xff3070, sig: ['eggs', 'leap', 'leap'] },
   },
   {
