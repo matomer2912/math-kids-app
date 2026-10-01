@@ -86,42 +86,109 @@ const ENEMIES = {
   boomer: { hp: 20,  spd: 4.3, dmg: 26, range: 2.2, cd: 99,  wind: 1.0,  xp: 7,  r: 0.5,  w: 10, minF: 2 },
   brute:  { hp: 140, spd: 2.3, dmg: 18, range: 2.6, cd: 1.8, wind: 0.75, xp: 25, r: 0.95, w: 8,  minF: 2 },
   caster: { hp: 55,  spd: 2.5, dmg: 9,  range: 10,  cd: 2.4, wind: 0.6,  xp: 18, r: 0.5,  w: 7,  ranged: true, minF: 4 },
-  chest:  { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.7,  prop: true },
-  pot:    { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.4,  prop: true },
-  boss:   { hp: 1000, spd: 2.4, dmg: 30, range: 0,  cd: 0,   wind: 0,    xp: 200, r: 1.9 },
+  // new archetypes
+  slime:   { hp: 40,  spd: 3.0, dmg: 8,  range: 1.6, cd: 1.2, wind: 0.4,  xp: 8,  r: 0.65, w: 12, minF: 1 },  // hops, splits in two when it dies
+  charger: { hp: 46,  spd: 3.0, dmg: 15, range: 10,  cd: 3.4, wind: 0.85, xp: 12, r: 0.7,  w: 8,  minF: 2 },  // red line telegraph, then dashes
+  shield:  { hp: 60,  spd: 2.6, dmg: 11, range: 1.9, cd: 1.5, wind: 0.55, xp: 14, r: 0.6,  w: 9,  minF: 3 },  // blocks hits from the front
+  bomber:  { hp: 26,  spd: 2.9, dmg: 14, range: 11,  cd: 3.0, wind: 0.55, xp: 10, r: 0.5,  w: 8,  minF: 4, ranged: true }, // lobs bombs at a marked spot
+  mage:    { hp: 36,  spd: 2.6, dmg: 8,  range: 11,  cd: 2.6, wind: 0.6,  xp: 16, r: 0.5,  w: 6,  minF: 6, ranged: true }, // teleports around, casts orb fans
+  totem:   { hp: 80,  spd: 0,   dmg: 0,  range: 0,   cd: 6,   wind: 0,    xp: 20, r: 0.6,  w: 0,  minF: 5, still: true }, // spawner, must be smashed
+  egg:     { hp: 26,  spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 2,  r: 0.6,  w: 0,  still: true },  // boss egg sac: hatches spiders
+  // props (smashables)
+  chest:   { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.7,  prop: true },
+  pot:     { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.4,  prop: true },
+  crate:   { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.55, prop: true },
+  barrel:  { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.5,  prop: true },
+  xbarrel: { hp: 1,   spd: 0,   dmg: 0,  range: 0,   cd: 99,  wind: 0,    xp: 0,  r: 0.5,  prop: true },  // red, explodes after a short fuse
+  boss:    { hp: 1000, spd: 2.4, dmg: 30, range: 0,  cd: 0,   wind: 0,    xp: 200, r: 1.9 },
 };
-const MOB_KEYS = ['grunt', 'runner', 'archer', 'boomer', 'brute', 'caster'];
+const MOB_KEYS = ['grunt', 'runner', 'archer', 'boomer', 'brute', 'caster', 'slime', 'charger', 'shield', 'bomber', 'mage'];
+const PROP_TYPES = ['chest', 'pot', 'crate', 'barrel', 'xbarrel'];
 
-const SKINS = ['mummy', 'skeleton', 'zombie', 'skelArcher', 'scorpion', 'spider', 'imp', 'golem', 'cube', 'priest', 'necro', 'boss', 'chest', 'pot'];
+// model skin names — the INDEX is sent over the network: only ever append
+const SKINS = ['mummy', 'skeleton', 'zombie', 'skelArcher', 'scorpion', 'spider', 'imp', 'golem', 'cube', 'priest', 'necro', 'boss', 'chest', 'pot',
+  'crate', 'barrel', 'xbarrel', 'guard', 'bomber', 'slime', 'charger', 'totem', 'mage', 'egg', 'lizard', 'knight', 'shroom', 'pirate', 'crab', 'bat'];
+const PROP_SKINS = new Set(PROP_TYPES);
+// true for smashable props (no HP bar, low auto-aim priority) — accepts a skin name or index
+function isPropSkin(sk) { return PROP_SKINS.has(typeof sk === 'number' ? SKINS[sk] : sk); }
 
+// shared mob skins for the new archetypes (their colors come from the theme)
+const NEW_MOBS = { slime: 'slime', charger: 'charger', shield: 'guard', bomber: 'bomber', mage: 'mage', totem: 'totem', egg: 'egg' };
+
+// Worlds. Each world = 3 floors, the 3rd is the boss floor.
+//  pit: non-walkable chasm / lava / water look   slow: sticky floor patches (slows everyone)
+//  pattern: floor tiles   walls: wall decoration style   traps: which traps appear   light: torch flame color
+//  boss.sig: the boss's signature attacks (added to the shared slam/stomp/charge/spray/summon set)
 const THEMES = [
   {
     name: 'Desert Tomb', floor: 0xd8b878, floor2: 0xc9a663, wall: 0xa7814b, top: 0xe3c890, voidc: 0x2b1d10, hemi: 0xfff0cc, ground: 0x6b4a22,
-    mobs: { grunt: 'mummy', runner: 'scorpion', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'priest' },
+    mobs: Object.assign({ grunt: 'mummy', runner: 'scorpion', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'priest' }, NEW_MOBS),
     golem: 0xc9a25e, cube: 0x7cc242, bone: 0xf1e6c8, accent: 0x2f6fd6, deco: 'desert',
-    boss: { name: 'The Sand Pharaoh', body: 0xe0b44a, accent: 0x2457c5, skin: 0x9a6b3a, eye: 0x3dffd0 },
+    pit: { c: 0x4a3018, c2: 0x7a5428, glow: 0 }, slow: { c: 0xb8904c, name: 'Quicksand' }, pattern: 'cracks', walls: 'brick', traps: ['spike', 'plate'],
+    light: 0xffa31a, carpet: 0x2f6fd6, carpet2: 0xffc72c, slime: 0xe0c060, guard: [0x1a1a1a, 0xffc72c], mage: [0x2457c5, 0xffc72c], totem: 0xc9a25e, charger: 0x2a6a8a,
+    boss: { name: 'The Sand Pharaoh', kind: 'pharaoh', body: 0xe0b44a, accent: 0x2457c5, skin: 0x9a6b3a, eye: 0x3dffd0, sig: ['spiral', 'spiral', 'raise'] },
   },
   {
     name: 'Bone Crypt', floor: 0x6d6f78, floor2: 0x5e6069, wall: 0x45474f, top: 0x7b7e88, voidc: 0x0d0e14, hemi: 0xc9d6ff, ground: 0x22242c,
-    mobs: { grunt: 'skeleton', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' },
+    mobs: Object.assign({ grunt: 'skeleton', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0x7d8088, cube: 0x58c43a, bone: 0xe9e9e0, accent: 0x7a3cc2, deco: 'crypt',
-    boss: { name: 'The Skeleton King', body: 0xe8e6da, accent: 0x7a1fc2, skin: 0xe8e6da, eye: 0xff2a2a },
+    pit: { c: 0x07060c, c2: 0x3a1a60, glow: 0 }, slow: { c: 0xd8d8e0, name: 'Cobwebs', web: true }, pattern: 'slabs', walls: 'bone', traps: ['spike', 'plate'],
+    light: 0xb08aff, carpet: 0x8a1a2a, carpet2: 0xc9a227, slime: 0x7dffb0, guard: [0xd8d8d0, 0x7a3cc2], mage: [0x3a1a6a, 0x9a6aff], totem: 0xe9e9e0, charger: 0x55585f,
+    boss: { name: 'The Skeleton King', kind: 'skelking', body: 0xe8e6da, accent: 0x7a1fc2, skin: 0xe8e6da, eye: 0xff2a2a, sig: ['bonewall', 'bonewall', 'raise'] },
+  },
+  {
+    name: 'Jungle Temple', floor: 0x7d8f62, floor2: 0x6e8055, wall: 0x56693f, top: 0x86a35a, voidc: 0x0b1a0c, hemi: 0xeaffd8, ground: 0x24401a,
+    mobs: Object.assign({ grunt: 'lizard', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
+    golem: 0x6f8060, cube: 0x3fbf3a, bone: 0xe0dcc0, accent: 0x1f9a5a, deco: 'jungle',
+    pit: { c: 0x1a4a44, c2: 0x2f7a6a, glow: 0 }, slow: { c: 0x5a4126, name: 'Mud' }, pattern: 'moss', walls: 'vine', traps: ['plate', 'spike'],
+    light: 0xffb63a, carpet: 0x8a5a2a, carpet2: 0xd0a040, slime: 0x6ad83a, guard: [0x3a8a3a, 0xd0a040], mage: [0x1f6a3a, 0xff7a2a], totem: 0x9a6a3a, charger: 0x6a4a2a,
+    boss: { name: 'The Spider Queen', kind: 'spider', body: 0x2a2030, accent: 0xc02060, skin: 0x2a2030, eye: 0xff3070, sig: ['eggs', 'leap', 'leap'] },
   },
   {
     name: 'Lava Forge', floor: 0x4a3530, floor2: 0x3d2b27, wall: 0x2d1f1c, top: 0x5e413a, voidc: 0x120604, hemi: 0xffc8a0, ground: 0x401010,
-    mobs: { grunt: 'zombie', runner: 'imp', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' },
+    mobs: Object.assign({ grunt: 'zombie', runner: 'imp', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0x3a2a26, cube: 0xff6a1a, bone: 0x3b3433, accent: 0xff4a10, deco: 'lava',
-    boss: { name: 'The Magma Titan', body: 0x2e2421, accent: 0xff5a00, skin: 0x2e2421, eye: 0xffd000 },
+    pit: { c: 0xff4a00, c2: 0xffa000, glow: 1 }, slow: { c: 0x2a2220, name: 'Ash' }, pattern: 'basalt', walls: 'basalt', traps: ['vent', 'spike'],
+    light: 0xff7a1a, carpet: 0x5a1a10, carpet2: 0xff7a1a, slime: 0xff5a1a, guard: [0x3a3a40, 0xff6a00], mage: [0x6a1a10, 0xffb000], totem: 0x2a2020, charger: 0x6a2a1a,
+    boss: { name: 'The Magma Titan', kind: 'titan', body: 0x2e2421, accent: 0xff5a00, skin: 0x2e2421, eye: 0xffd000, sig: ['meteors', 'shock', 'shock'] },
   },
   {
     name: 'Frost Caverns', floor: 0xb9d4e6, floor2: 0xa7c4d9, wall: 0x7ea3c0, top: 0xdcefff, voidc: 0x0b1626, hemi: 0xe6f4ff, ground: 0x3a5c7a,
-    mobs: { grunt: 'zombie', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' },
+    mobs: Object.assign({ grunt: 'zombie', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0x9fd0ef, cube: 0x4fe0ff, bone: 0xdff3ff, accent: 0x2aa3ff, deco: 'ice',
-    boss: { name: 'The Frost Giant', body: 0x8fc4e8, accent: 0xffffff, skin: 0x8fc4e8, eye: 0x00e5ff },
+    pit: { c: 0x0e3a66, c2: 0x2a6aa0, glow: 0 }, slow: { c: 0xf4fbff, name: 'Deep Snow' }, pattern: 'ice', walls: 'crystal', traps: ['spike', 'vent'],
+    light: 0x7fe8ff, carpet: 0x2a5a9a, carpet2: 0xdff3ff, slime: 0x8fe8ff, guard: [0x5a8ab0, 0xdff3ff], mage: [0x2a6ab0, 0xffffff], totem: 0x9fe6ff, charger: 0x7a6a5a,
+    boss: { name: 'The Frost Giant', kind: 'giant', body: 0x8fc4e8, accent: 0xffffff, skin: 0x8fc4e8, eye: 0x00e5ff, sig: ['icicles', 'icicles', 'avalanche'] },
+  },
+  {
+    name: 'Sky Castle', floor: 0xe6e2ee, floor2: 0xd3cde0, wall: 0xa9a2bd, top: 0xf6f3ff, voidc: 0x5d9be0, hemi: 0xffffff, ground: 0x8fb4e0,
+    mobs: Object.assign({ grunt: 'knight', runner: 'bat', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
+    golem: 0xd8d4e4, cube: 0x8fd0ff, bone: 0xf0f0f0, accent: 0x2a5ad0, deco: 'sky',
+    pit: { c: 0x6aaaf0, c2: 0xffffff, glow: 0, sky: true }, slow: { c: 0xffffff, name: 'Cloud Fluff' }, pattern: 'marble', walls: 'banner', traps: ['vent', 'plate'],
+    light: 0xfff07a, carpet: 0x2a4ac0, carpet2: 0xffc72c, slime: 0xc8e8ff, guard: [0xc0c8d8, 0xffc72c], mage: [0x2a4ac0, 0xffe14a], totem: 0xe6e2ee, charger: 0x8a7ad0,
+    boss: { name: 'The Storm Dragon', kind: 'dragon', body: 0x3a5cc8, accent: 0xffe14a, skin: 0x3a5cc8, eye: 0xffffff, sig: ['lightning', 'lightning', 'breath'] },
+  },
+  {
+    name: 'Mushroom Caves', floor: 0x544766, floor2: 0x4a3e5b, wall: 0x332a45, top: 0x63527c, voidc: 0x0a0612, hemi: 0xe6d0ff, ground: 0x1d1233,
+    mobs: Object.assign({ grunt: 'shroom', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
+    golem: 0x6a5a80, cube: 0xd05aff, bone: 0xe8e0f0, accent: 0x3affc0, deco: 'mushroom',
+    pit: { c: 0x2adf5a, c2: 0x9aff3a, glow: 1 }, slow: { c: 0x8a3ac0, name: 'Goo' }, pattern: 'moss', walls: 'glow', traps: ['vent', 'spike'],
+    light: 0x5affd0, carpet: 0x6a2a8a, carpet2: 0x3affc0, slime: 0xd05aff, guard: [0x6a4a8a, 0x3affc0], mage: [0x5a1a8a, 0x3affc0], totem: 0xd02a3a, charger: 0x4a3a6a,
+    boss: { name: 'The Mushroom King', kind: 'mushroom', body: 0xd8243a, accent: 0xffffff, skin: 0xf0e0c0, eye: 0x222222, sig: ['spores', 'spores', 'bounce'] },
+  },
+  {
+    name: 'Pirate Cove', floor: 0xa47444, floor2: 0x93663a, wall: 0x5c534a, top: 0x7d7468, voidc: 0x06202a, hemi: 0xfff0d8, ground: 0x1a3a4a,
+    mobs: Object.assign({ grunt: 'pirate', runner: 'crab', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
+    golem: 0xc07a6a, cube: 0x3a3a3a, bone: 0xe8e6da, accent: 0xc0302a, deco: 'pirate',
+    pit: { c: 0x135a7a, c2: 0x3aa0c0, glow: 0 }, slow: { c: 0x4a6a3a, name: 'Seaweed' }, pattern: 'planks', walls: 'cave', traps: ['plate', 'spike'],
+    light: 0xffb040, carpet: 0xa0201a, carpet2: 0xffc72c, slime: 0x3ac0b0, guard: [0x2a2a3a, 0xc0302a], mage: [0x1a4a6a, 0x3dffd0], totem: 0x8a5a2a, charger: 0x3a6a8a,
+    boss: { name: 'Captain Bonebeard', kind: 'captain', body: 0x2a2a3a, accent: 0xc0302a, skin: 0xe8e6da, eye: 0x3dffd0, sig: ['cannons', 'cannons', 'anchor'] },
   },
 ];
 function themeFor(floor) { return THEMES[Math.floor((floor - 1) / 3) % THEMES.length]; }
 function isBossFloor(floor) { return floor % 3 === 0; }
+// how many times the player has looped through all worlds (for harder scaling)
+function worldLoop(floor) { return Math.floor((floor - 1) / (3 * THEMES.length)); }
 
 const PLAYER_COLORS = ['#3d8bff', '#ff4d4d', '#3ddc6a', '#ffcc33', '#b366ff', '#ff8a3d'];
 
