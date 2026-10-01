@@ -3,7 +3,7 @@
 
 // ---------- visuals ----------
 const HPBAR_BG = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6, depthTest: false });
-const HPBAR_FG = new THREE.MeshBasicMaterial({ color: 0xff3b3b, depthTest: false });
+const HPBAR_FG = new THREE.MeshBasicMaterial({ color: 0xff3b3b, depthTest: false, toneMapped: false });
 const PLANE = new THREE.PlaneGeometry(1, 1);
 function makeBar() {
   const g = new THREE.Group();
@@ -80,8 +80,14 @@ function syncVisuals(dt) {
       const model = buildPlayerModel(p.color);
       o = { obj: model.root, model, x: p.x, z: p.z, f: p.f, px: p.x, pz: p.z, color: p.color };
       scene.add(o.obj); vis.set(key, o);
-      // the hero ring stays visible through walls so a hero behind a wall is never lost
-      if (model.ring) { model.ring.material.depthTest = false; model.ring.material.toneMapped = false; model.ring.renderOrder = 9; }
+      // x-ray: a copy of the hero ring drawn on top of everything, shown only while a wall is between
+      // the camera and the hero, so a hero behind a wall is never lost
+      if (model.ring) {
+        model.ring.material.toneMapped = false;
+        const xr = o.xr = new THREE.Mesh(model.ring.geometry, model.ring.material.clone());
+        Object.assign(xr.material, { depthTest: false, depthWrite: false, opacity: 0.8 });
+        xr.rotation.x = -Math.PI / 2; xr.position.y = 1.0; xr.scale.setScalar(0.9); xr.renderOrder = 9; xr.visible = false; model.root.add(xr);
+      }
     }
     o.seen = visFrame; o.seenT = T;
     const mine = p.id === G.myId;
@@ -107,6 +113,7 @@ function syncVisuals(dt) {
       animateModel(o.model, dt, dodging ? 0 : spd, o.atkT > 0 ? o.atkT / 0.28 : 0, 0, T);
     }
     o.model.ring.material.opacity = 0.6 + 0.3 * Math.sin(T * 4);
+    if (o.xr) o.xr.visible = !p.downed && behindWall(o.x, o.z);
   }
   // enemies
   for (const e of v.enemies) {
@@ -202,6 +209,13 @@ function syncVisuals(dt) {
     const fm = G.level.userData.flame.material;
     fm.color.setHSL(G.theme.deco === 'ice' ? 0.52 : 0.08 + 0.02 * Math.sin(T * 9), 1, 0.55 + 0.05 * Math.sin(T * 13));
   }
+}
+// true when a wall stands on the line from the hero's chest up to the camera
+function behindWall(x, z) {
+  if (!G.map) return false;
+  const dx = camera.position.x - x, dy = camera.position.y - 1.2, dz = camera.position.z - z, L = Math.hypot(dx, dy, dz);
+  for (let s = 0.6; s < 4.5; s += 0.4) { const y = 1.2 + dy * s / L; if (y > 2.6) break; const M = G.map, i = Math.floor((x + dx * s / L) / TILE), j = Math.floor((z + dz * s / L) / TILE); if (i >= 0 && j >= 0 && i < M.W && j < M.H && M.g[j * M.W + i] === T_WALL) return true; }
+  return false;
 }
 function lerpAngle(a, b, t) { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + d * t; }
 
