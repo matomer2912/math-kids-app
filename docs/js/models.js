@@ -101,17 +101,162 @@ function setWeapon(model, w, rar) {
   model.wtype = w;
 }
 
-function buildPlayerModel(colorHex) {
+function buildPlayerModel(colorHex, skin) {
   const c = new THREE.Color(colorHex).getHex();
   const mdl = humanoid({ skin: 0xf1c27d, shirt: c, pants: 0x3a3f58, hair: 0x5a3a1a, belt: 0x5a3a1a, sleeve: c });
   // hero cape
   const cape = bx(mdl.body, 0.6, 0.9, 0.06, 0, 1.0, -0.24, lam(new THREE.Color(colorHex).multiplyScalar(0.6).getHex()));
   cape.rotation.x = 0.12;
+  mdl.cape = cape;
   // colored ring under player for easy identification
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.9, 20), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; mdl.root.add(ring);
   mdl.ring = ring;
+  mdl.skin = skin || '';
+  if (skin && HERO_OUTFITS[skin]) HERO_OUTFITS[skin](mdl, c);
   return mdl;
+}
+
+// ---------- hero outfits (cosmetic skins bought from the merchant) ----------
+// Each adds voxel accessories to a player model; the shirt keeps the player's color so teammates
+// stay easy to tell apart.
+const HERO_OUTFITS = {
+  explorer(m, c) {
+    const kh = lam(0xd8c08a), band = lam(0x6a4a2a);
+    bx(m.head, 0.6, 0.18, 0.6, 0, 0.6, 0, kh); bx(m.head, 0.84, 0.05, 0.84, 0, 0.52, 0, kh); bx(m.head, 0.62, 0.06, 0.62, 0, 0.55, 0, band);
+    bx(m.body, 0.46, 0.52, 0.22, 0, 1.12, -0.3, lam(0x8a5a2a)); bx(m.body, 0.5, 0.14, 0.16, 0, 1.44, -0.34, lam(0x5a8a3a)); // backpack + bedroll
+    bx(m.body, 0.08, 0.7, 0.42, -0.2, 1.15, 0, band); // strap
+  },
+  ninja(m, c) {
+    const blk = lam(0x1d1d24), red = lam(0xd8242a);
+    bx(m.head, 0.54, 0.2, 0.54, 0, 0.1, 0, blk); bx(m.head, 0.54, 0.16, 0.54, 0, 0.44, 0, blk);
+    bx(m.head, 0.56, 0.08, 0.56, 0, 0.38, 0, red);
+    const t1 = bx(m.head, 0.08, 0.36, 0.05, -0.06, 0.24, -0.33, red); t1.rotation.x = -0.5; t1.rotation.z = 0.3;
+    const t2 = bx(m.head, 0.08, 0.32, 0.05, 0.06, 0.24, -0.33, red); t2.rotation.x = -0.4; t2.rotation.z = -0.25;
+    bx(m.body, 0.66, 0.1, 0.4, 0, 0.8, 0, red);
+  },
+  pirate(m, c) {
+    const blk = lam(0x1d1a1a), gold = lam(0xffc72c), red = lam(0xc0302a);
+    bx(m.head, 0.76, 0.06, 0.62, 0, 0.55, 0, blk); bx(m.head, 0.48, 0.2, 0.44, 0, 0.67, -0.02, blk);
+    bx(m.head, 0.78, 0.04, 0.64, 0, 0.585, 0, gold);
+    bx(m.head, 0.12, 0.12, 0.03, 0, 0.66, 0.235, lam(0xffffff)); // skull badge
+    bx(m.head, 0.15, 0.13, 0.03, 0.12, 0.28, 0.265, blk); bx(m.head, 0.54, 0.03, 0.54, 0, 0.33, 0, blk); // eyepatch + strap
+    const sash = bx(m.body, 0.16, 0.85, 0.42, 0, 1.12, 0, red); sash.rotation.z = 0.6;
+  },
+  knight(m, c) {
+    const steel = lam(0xc8d0dc), dark = lam(0x2a2e38);
+    bx(m.head, 0.6, 0.6, 0.6, 0, 0.27, 0, steel);
+    bx(m.head, 0.46, 0.07, 0.03, 0, 0.3, 0.305, dark); bx(m.head, 0.05, 0.3, 0.03, 0, 0.16, 0.305, dark);
+    bx(m.head, 0.1, 0.32, 0.4, 0, 0.72, -0.02, lam(c)); // plume in team color
+    bx(m.body, 0.7, 0.52, 0.44, 0, 1.2, 0, steel);
+    bx(m.armL, 0.3, 0.16, 0.34, 0, 0.0, 0, steel); bx(m.armR, 0.3, 0.16, 0.34, 0, 0.0, 0, steel);
+  },
+  wizard(m, c) {
+    const hat = lam(0x3a2a9a), star = new THREE.MeshBasicMaterial({ color: 0xffe14a });
+    bx(m.head, 0.78, 0.05, 0.78, 0, 0.52, 0, hat);
+    const tip = new THREE.Group(); tip.position.set(0, 0.55, 0); tip.rotation.z = -0.12; m.head.add(tip);
+    bx(tip, 0.5, 0.2, 0.5, 0, 0.1, 0, hat); bx(tip, 0.38, 0.2, 0.38, 0, 0.3, 0, hat); bx(tip, 0.26, 0.2, 0.26, 0.02, 0.5, 0, hat); bx(tip, 0.14, 0.18, 0.14, 0.05, 0.68, 0, hat);
+    bx(tip, 0.1, 0.1, 0.02, 0.1, 0.22, 0.26, star); bx(tip, 0.08, 0.08, 0.02, -0.08, 0.42, 0.2, star);
+    bx(m.head, 0.36, 0.24, 0.08, 0, 0.05, 0.27, lam(0xf2f2f2)); // beard
+    const gold = lam(0xffc72c);
+    bx(m.body, 0.68, 0.08, 0.42, 0, 0.82, 0, gold); bx(m.body, 0.1, 0.72, 0.41, 0, 1.12, 0, gold);
+  },
+  pharaoh(m, c) {
+    const gold = lam(0xffc72c), blue = lam(0x2457c5);
+    bx(m.head, 0.6, 0.14, 0.6, 0, 0.55, 0, gold); bx(m.head, 0.6, 0.06, 0.6, 0, 0.47, 0, blue);
+    for (const sx of [-1, 1]) { for (let i = 0; i < 4; i++) bx(m.head, 0.12, 0.13, 0.3, sx * 0.31, 0.38 - i * 0.13, -0.02, i % 2 ? blue : gold); }
+    bx(m.head, 0.56, 0.5, 0.1, 0, 0.2, -0.3, gold); bx(m.head, 0.56, 0.08, 0.11, 0, 0.3, -0.3, blue); bx(m.head, 0.56, 0.08, 0.11, 0, 0.1, -0.3, blue);
+    bx(m.head, 0.1, 0.16, 0.08, 0, 0.62, 0.3, lam(0x2aa84a)); // cobra
+    bx(m.body, 0.72, 0.14, 0.44, 0, 1.44, 0, gold); bx(m.body, 0.6, 0.08, 0.43, 0, 1.34, 0, blue);
+  },
+  robot(m, c) {
+    const met = lam(0xa8b4c0), dk = lam(0x4a5260), glow = new THREE.MeshBasicMaterial({ color: 0x3dffe0 });
+    bx(m.head, 0.6, 0.58, 0.6, 0, 0.26, 0, met); bx(m.head, 0.46, 0.11, 0.03, 0, 0.3, 0.305, glow);
+    bx(m.head, 0.05, 0.3, 0.05, 0.12, 0.7, 0, dk); bx(m.head, 0.12, 0.12, 0.12, 0.12, 0.88, 0, new THREE.MeshBasicMaterial({ color: 0xff3a3a }));
+    bx(m.head, 0.66, 0.12, 0.12, 0, 0.3, 0, dk); // ear bolts
+    bx(m.body, 0.7, 0.5, 0.44, 0, 1.2, 0, met); bx(m.body, 0.2, 0.14, 0.03, 0, 1.25, 0.225, glow);
+    bx(m.armL, 0.26, 0.2, 0.3, 0, -0.05, 0, dk); bx(m.armR, 0.26, 0.2, 0.3, 0, -0.05, 0, dk);
+  },
+  golden(m, c) {
+    const gold = lam(0xffcf3a, 0x4a3000), gem = new THREE.MeshBasicMaterial({ color: 0xff2a5a });
+    bx(m.head, 0.6, 0.3, 0.6, 0, 0.42, 0, gold);
+    for (const [x, z] of [[-0.22, 0.22], [0.22, 0.22], [0, 0.22], [-0.22, -0.22], [0.22, -0.22], [0, -0.22], [-0.22, 0], [0.22, 0]]) bx(m.head, 0.12, 0.2, 0.12, x, 0.66, z, gold);
+    bx(m.head, 0.1, 0.1, 0.03, 0, 0.46, 0.305, gem);
+    bx(m.body, 0.72, 0.54, 0.46, 0, 1.2, 0, gold);
+    bx(m.armL, 0.32, 0.18, 0.36, 0, 0, 0, gold); bx(m.armR, 0.32, 0.18, 0.36, 0, 0, 0, gold);
+    if (m.cape) m.cape.material = lam(0xb8860b, 0x332200);
+  },
+};
+
+// ---------- merchant: turbaned desert trader, market stall and a resting camel ----------
+// mc = map.merchant (world placement). Returns a static group (+ userData for the idle animation).
+function buildMerchantModel(theme, mc) {
+  const root = new THREE.Group();
+  const stall = new THREE.Group(); stall.position.set(mc.sx, 0, mc.sz); stall.rotation.y = mc.rot; root.add(stall);
+  const wood = lam(0x8a5a2a), wood2 = lam(0x6a4220), cloth1 = lam(theme.carpet || 0x2f6fd6), cloth2 = lam(theme.carpet2 || 0xffc72c), gold = lam(0xffc72c, 0x3a2600);
+  // carpet in front of the stall
+  bx(stall, 4.4, 0.04, 2.0, 0, 0.03, 1.9, cloth2); bx(stall, 4.0, 0.05, 1.6, 0, 0.04, 1.9, cloth1);
+  for (let i = -3; i <= 3; i++) bx(stall, 0.25, 0.06, 0.25, i * 0.55, 0.045, 1.9, cloth2);
+  // posts, counter, awning stripes
+  for (const x of [-2.6, 2.6]) { bx(stall, 0.22, 2.9, 0.22, x, 1.45, 0.75, wood); bx(stall, 0.22, 3.3, 0.22, x, 1.65, -0.85, wood); }
+  bx(stall, 5.0, 0.95, 0.75, 0, 0.48, 0.55, wood); bx(stall, 5.1, 0.1, 0.85, 0, 0.98, 0.55, wood2);
+  bx(stall, 4.9, 0.5, 0.05, 0, 0.55, 0.94, cloth1); // front cloth
+  const awn = new THREE.Group(); awn.position.set(0, 3.05, -0.05); awn.rotation.x = 0.32; stall.add(awn);
+  for (let i = 0; i < 8; i++) bx(awn, 0.68, 0.08, 2.1, -2.38 + i * 0.68, 0, 0, i % 2 ? cloth1 : cloth2);
+  for (let i = 0; i < 8; i++) bx(awn, 0.68, 0.24, 0.06, -2.38 + i * 0.68, -0.12, 1.06, i % 2 ? cloth2 : cloth1); // scalloped edge
+  // back cloth + shelves with goods
+  bx(stall, 5.0, 2.6, 0.08, 0, 1.4, -0.95, cloth1);
+  bx(stall, 4.6, 0.08, 0.4, 0, 1.75, -0.75, wood2);
+  const potC = [0xff4a3a, 0xffe14a, 0x9ab8d8, 0xff9a2a, 0x5aff8a, 0xc65cff];
+  for (let i = 0; i < 6; i++) {
+    const pm = new THREE.MeshLambertMaterial({ color: potC[i], emissive: potC[i], emissiveIntensity: 0.35 });
+    bx(stall, 0.22, 0.3, 0.22, -1.9 + i * 0.75, 1.95, -0.75, pm); bx(stall, 0.1, 0.1, 0.1, -1.9 + i * 0.75, 2.15, -0.75, wood2);
+  }
+  // goods on the counter: chest, sword, pots
+  bx(stall, 0.7, 0.4, 0.45, -1.7, 1.23, 0.55, lam(0x9a5a20)); bx(stall, 0.72, 0.08, 0.47, -1.7, 1.3, 0.55, gold);
+  const sw = new THREE.Group(); sw.position.set(1.6, 1.1, 0.55); sw.rotation.set(0, 0.3, 1.35); sw.add(buildWeaponMesh('sword', 3)); stall.add(sw);
+  bx(stall, 0.36, 0.4, 0.36, 0.7, 1.23, 0.6, lam(0xc0703a)); bx(stall, 0.22, 0.12, 0.22, 0.7, 1.48, 0.6, lam(0xa05a2a));
+  // the trader (behind the counter)
+  const tr = humanoid({ skin: 0xc68642, shirt: 0x7a2a8a, pants: 0x4a2a5a, robe: true, belt: 0xffc72c, sleeve: 0x7a2a8a });
+  tr.root.position.set(0, 0, -0.25); tr.root.scale.setScalar(1.1); stall.add(tr.root);
+  const tw = lam(0xf4efe0);
+  bx(tr.head, 0.62, 0.26, 0.62, 0, 0.58, 0, tw); bx(tr.head, 0.5, 0.14, 0.5, 0, 0.76, 0, tw); // turban
+  bx(tr.head, 0.12, 0.12, 0.04, 0, 0.6, 0.32, new THREE.MeshBasicMaterial({ color: 0xff2a5a })); // gem
+  bx(tr.head, 0.4, 0.2, 0.08, 0, 0.05, 0.27, lam(0x2a1a10)); bx(tr.head, 0.3, 0.05, 0.03, 0, 0.18, 0.27, lam(0x2a1a10)); // beard + moustache
+  bx(tr.body, 0.68, 0.6, 0.42, 0, 1.1, 0, lam(0xd8a03a)); // vest
+  // floating gold coin beacon (seen from across the room)
+  const coin = new THREE.Group(); coin.position.set(0, 4.3, 0.4); stall.add(coin);
+  const cm = new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x806000 });
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.12, 14), cm); cyl.rotation.x = Math.PI / 2; coin.add(cyl);
+  bx(coin, 0.14, 0.42, 0.14, 0, 0, 0, lam(0xb8860b));
+  // camel resting on the side tile
+  const cam = new THREE.Group(); cam.position.set(mc.camel.x, 0, mc.camel.z); cam.rotation.y = mc.rot + (mc.v & 1 ? 0.5 : -0.5); root.add(cam);
+  const fur = lam(0xc9995a), fur2 = lam(0xa87a42), blk = new THREE.MeshBasicMaterial({ color: 0x1a1008 });
+  bx(cam, 0.8, 0.55, 1.5, 0, 0.42, 0, fur); bx(cam, 0.6, 0.4, 0.6, 0, 0.85, -0.1, fur2); // body + hump
+  bx(cam, 0.84, 0.08, 0.9, 0, 0.72, 0.15, cloth1); bx(cam, 0.86, 0.06, 0.3, 0, 0.74, 0.15, cloth2); // blanket
+  const neck = new THREE.Group(); neck.position.set(0, 0.55, 0.65); neck.rotation.x = -0.35; cam.add(neck);
+  bx(neck, 0.3, 0.9, 0.3, 0, 0.45, 0, fur);
+  const hd = new THREE.Group(); hd.position.set(0, 0.95, 0.05); neck.add(hd);
+  bx(hd, 0.32, 0.3, 0.6, 0, 0, 0.15, fur); bx(hd, 0.26, 0.16, 0.2, 0, -0.06, 0.5, fur2);
+  bx(hd, 0.06, 0.06, 0.03, -0.12, 0.06, 0.3, blk); bx(hd, 0.06, 0.06, 0.03, 0.12, 0.06, 0.3, blk);
+  bx(hd, 0.36, 0.06, 0.16, 0, 0.17, 0.0, fur2); // ears
+  for (const [x, z] of [[-0.3, 0.55], [0.3, 0.55], [-0.3, -0.55], [0.3, -0.55]]) bx(cam, 0.24, 0.16, 0.5, x, 0.08, z + 0.15, fur2); // folded legs
+  bx(cam, 0.1, 0.4, 0.1, 0, 0.45, -0.8, fur2); // tail
+  addShadow(cam, 1.0);
+  root.userData = { trader: tr, coin, neck: hd, t: (mc.v % 100) / 10 };
+  return root;
+}
+// idle animation: the trader sways and waves when a hero is near; the coin spins; the camel chews
+function animateMerchant(root, dt, near) {
+  const u = root.userData; if (!u || !u.trader) return;
+  u.t += dt;
+  const tr = u.trader;
+  tr.body.position.y = 0.03 * Math.sin(u.t * 2);
+  tr.armR.rotation.x = near ? -2.6 + 0.1 * Math.sin(u.t * 6) : -0.2 + 0.08 * Math.sin(u.t * 1.6);
+  tr.armR.rotation.z = near ? 0.35 * Math.sin(u.t * 7) : 0;
+  tr.head.rotation.y = 0.25 * Math.sin(u.t * 0.7);
+  u.coin.rotation.y += dt * 2.2; u.coin.position.y = 4.3 + 0.15 * Math.sin(u.t * 2.4);
+  u.neck.rotation.x = 0.05 * Math.sin(u.t * 5);
 }
 
 // ---------- enemies ----------

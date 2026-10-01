@@ -225,12 +225,28 @@ const Sim = (() => {
         if (xx < 0 || xx >= W || m < 0 || m >= N || g[m] !== T_FLOOR) { nw[k] = 1; break; }
       }
     }
-    S.nearWall = nw; S.flow = new Int32Array(N).fill(-1);
+    // big bodies (wider than a tile: elite brutes, bosses) can't use 1-tile necks: floor tiles that are
+    // blocked on both opposite sides are left out of their field, and wall-hugging tiles cost more
+    const wide = new Uint8Array(N);
+    for (let k = 0; k < N; k++) {
+      if (g[k] !== T_FLOOR) continue;
+      const x = k % W;
+      const L = x > 0 && g[k - 1] === T_FLOOR, Rr = x < W - 1 && g[k + 1] === T_FLOOR, U = k >= W && g[k - W] === T_FLOOR, D = k + W < N && g[k + W] === T_FLOOR;
+      wide[k] = (L || Rr) && (U || D) && !(!L && !Rr) && !(!U && !D) ? 1 : 0;
+    }
+    S.nearWall = nw; S.wide = wide; S.flow = new Int32Array(N).fill(-1); S.flowBig = new Int32Array(N).fill(-1);
   }
+  const BIG_R = 1.0; // body radius (r * 0.9) above which an enemy uses the wide-body flow field
+  const isBig = e => e.r * 0.9 > BIG_R;
   function updateFlow() {
-    const map = S.map, W = map.W, N = W * map.H, g = map.g;
+    const map = S.map, N = map.W * map.H;
     if (!S.flow || S.flow.length !== N || !S.nearWall) navPrep();
-    const fl = S.flow, nw = S.nearWall; fl.fill(-1);
+    flowFill(S.flow, null, 1);
+    if (S.enemies.some(e => e.awake && e.hp > 0 && isBig(e))) flowFill(S.flowBig, S.wide, 3); else S.flowBig.fill(-1);
+  }
+  function flowFill(fl, mask, wallCost) {
+    const map = S.map, W = map.W, N = W * map.H, g = map.g;
+    const nw = S.nearWall; fl.fill(-1);
     const B = S.buckets || (S.buckets = [[], [], [], [], [], [], [], []]);
     for (const b of B) b.length = 0;
     let pending = 0;
@@ -248,9 +264,9 @@ const Sim = (() => {
           const ox = NBX[n], oy = NBY[n], xx = x + ox;
           if (xx < 0 || xx >= W) continue;
           const m = k + ox + oy * W;
-          if (m < 0 || m >= N || g[m] !== T_FLOOR) continue;
+          if (m < 0 || m >= N || g[m] !== T_FLOOR || (mask && !mask[m])) continue;
           if (n >= 4 && (g[k + ox] !== T_FLOOR || g[k + oy * W] !== T_FLOOR)) continue;
-          const c = cur + (n >= 4 ? 3 : 2) + nw[m];
+          const c = cur + (n >= 4 ? 3 : 2) + nw[m] * wallCost;
           if (fl[m] < 0 || c < fl[m]) { fl[m] = c; B[c & 7].push(m); pending++; }
         }
       }
@@ -270,8 +286,9 @@ const Sim = (() => {
   }
   const tileC = k => [((k % S.map.W) + 0.5) * TILE, (Math.floor(k / S.map.W) + 0.5) * TILE];
   // steepest-descent neighbour on the flow field (diagonals only around clear corners)
-  function flowNext(k) {
-    const map = S.map, W = map.W, fl = S.flow, g = map.g, x = k % W;
+  function flowNext(k, fl) {
+    fl = fl || S.flow;
+    const map = S.map, W = map.W, g = map.g, x = k % W;
     let best = fl[k] < 0 ? 1e9 : fl[k], bk = -1;
     for (let n = 0; n < 8; n++) {
       const ox = NBX[n], oy = NBY[n], xx = x + ox;
@@ -288,17 +305,19 @@ const Sim = (() => {
   function navCompute(e, tx, tz) {
     const r = e.r * 0.9, dx = tx - e.x, dz = tz - e.z, dd = Math.hypot(dx, dz) || 1;
     if (dd < 30 && walkLine(e.x, e.z, tx, tz, r)) return [dx / dd, dz / dd];
-    const map = S.map, fl = S.flow;
+    const map = S.map;
     let k = tileOf(map, e.x, e.z);
+    let fl = isBig(e) && S.flowBig ? S.flowBig : S.flow;
+    if (fl === S.flowBig && k >= 0 && k < fl.length && fl[k] < 0 && flowNext(k, fl) < 0) fl = S.flow; // off the wide network: use the normal field
     if (!fl || k < 0 || k >= fl.length) return [dx / dd, dz / dd];
     if (fl[k] < 0) { // standing on an unreached tile (edge of a wall / bad spawn): head to the nearest reached neighbour
-      const nb = flowNext(k);
+      const nb = flowNext(k, fl);
       if (nb < 0) return [dx / dd, dz / dd];
       const [cx, cz] = tileC(nb), cd = Math.hypot(cx - e.x, cz - e.z) || 1;
       return [(cx - e.x) / cd, (cz - e.z) / cd];
     }
     const chain = [];
-    for (let i = 0; i < 5; i++) { const nb = flowNext(k); if (nb < 0) break; chain.push(nb); k = nb; }
+    for (let i = 0; i < 5; i++) { const nb = flowNext(k, fl); if (nb < 0) break; chain.push(nb); k = nb; }
     if (!chain.length) return [dx / dd, dz / dd];
     for (let i = chain.length - 1; i >= 0; i--) {
       const [cx, cz] = tileC(chain[i]);
@@ -354,7 +373,7 @@ const Sim = (() => {
           const c = Math.cos(a), s = Math.sin(a);
           opts.push([wantX * c - wantZ * s, wantX * s + wantZ * c]);
         }
-        const k = tileOf(S.map, e.x, e.z), nb = S.flow ? flowNext(k) : -1;
+        const k = tileOf(S.map, e.x, e.z), nb = S.flow ? flowNext(k, isBig(e) && S.flowBig ? S.flowBig : S.flow) : -1;
         if (nb >= 0) { const [cx, cz] = tileC(nb), cd = Math.hypot(cx - e.x, cz - e.z) || 1; opts.unshift([(cx - e.x) / cd, (cz - e.z) / cd]); }
         for (const [ox, oz] of opts) {
           if (!blockedCircle(S.map, e.x + ox * 0.7, e.z + oz * 0.7, r)) { e.unX = ox; e.unZ = oz; e.unT = 0.5 + 0.15 * Math.min(4, e.stuckN); break; }

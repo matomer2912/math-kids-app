@@ -89,15 +89,17 @@ function updateHUD(dt) {
   const alive = v.players.filter(p => !p.downed).length;
   let obj, go = false;
   if (v.boss) obj = '👑 Beat the boss!';
-  else if (v.po && v.pn > 0 && v.players.length > 1) { go = true; obj = '🌀 ' + v.pn + '/' + alive + ' at portal'; }
+  else if (v.po && v.pt > 0) { go = true; obj = '🌀 Leaving in ' + Math.ceil(v.pt / 10) + '…'; }
+  else if (v.po && v.pn > 0 && v.players.length > 1) { go = true; obj = '🌀 ' + v.pn + '/' + alive + ' at portal — join them!'; }
   else if (v.po && (boss || !v.k)) { go = true; obj = '🌀 Portal open — go!'; }
   else obj = '👾 ' + (v.k || 0) + ' left';
   setTxt(h.objPill, obj); setCls(h.objPill, 'go', go);
+  updatePortalHUD(v, alive);
   // cooldowns
   const W = WEAPONS[equipped().w];
   cdRing(h.spBtn, h.spBtnCd, h.spBtnT, me.spCd, W.scd);
   cdRing(h.ptBtn, h.ptBtnCd, h.ptBtnT, me.potCd, COOLDOWN.potion);
-  cdRing(h.dgBtn, h.dgBtnCd, null, me.dodgeCd, COOLDOWN.dodge);
+  cdRing(h.dgBtn, h.dgBtnCd, null, me.dodgeCd, rollCooldown(Profile.boosts));
   // boss
   if (v.boss) {
     setCls(h.bossbar, 'hidden', false); setCls(h.hud, 'boss', true);
@@ -131,6 +133,34 @@ function updateHUD(dt) {
     el.style.display = '';
   }
   for (const [id, el] of pool) if (!seen.has(id)) el.style.display = 'none';
+}
+
+// portal: big 5 s countdown while everyone stands in it (tick each second), or "waiting for teammates"
+// for the ones already standing in it
+let portalLastN = 0;
+function updatePortalHUD(v, alive) {
+  const el = $('portalCd');
+  const ex = G.map && G.map.exit;
+  const inPortal = ex && !me.downed && Math.hypot(me.x - ex.x, me.z - ex.z) < Sim.PORTAL_R;
+  if (v.po && v.pt > 0) {
+    const n = Math.ceil(v.pt / 10), k = 360 * (1 - v.pt / (Sim.PORTAL_T * 10));
+    if (n !== portalLastN) {
+      setHTML(el, `<div class="pc-ring"><span class="n tick">${n}</span></div><div><div class="pc-t">🌀 Next floor in ${n}…</div><div class="pc-s">${inPortal ? 'Step out to stay and explore' : 'Everyone is in the portal!'}</div></div>`);
+      const nn = el.querySelector('.n'); if (nn) replayCls(nn, 'tick');
+      sfx(n <= 1 ? 'tock' : 'tick'); if (n <= 3) vibrate(20);
+      portalLastN = n;
+    }
+    const ring = el.querySelector('.pc-ring'); if (ring) ring.style.setProperty('--k', k.toFixed(0) + 'deg');
+    setCls(el, 'wait', false); setCls(el, 'hidden', false);
+    return;
+  }
+  portalLastN = 0;
+  if (v.po && inPortal && v.pn < alive && alive > 1) {
+    setHTML(el, `<div><div class="pc-t">⏳ Waiting for teammates ${v.pn}/${alive}</div><div class="pc-s">Everyone must stand in the portal to go on</div></div><div class="pc-dots">${'<i class="on"></i>'.repeat(v.pn)}${'<i></i>'.repeat(Math.max(0, alive - v.pn))}</div>`);
+    setCls(el, 'wait', true); setCls(el, 'hidden', false);
+    return;
+  }
+  setCls(el, 'hidden', true);
 }
 
 // banner pop: replay the entrance animation whenever the headline changes

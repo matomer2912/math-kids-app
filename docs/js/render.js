@@ -74,10 +74,10 @@ function syncVisuals(dt) {
   for (const p of v.players) {
     const key = 'p' + p.id;
     let o = vis.get(key);
-    if (o && o.color !== p.color) { removeVis(key); o = null; }
+    if (o && (o.color !== p.color || o.skin !== (p.skin || ''))) { removeVis(key); o = null; } // outfit changed: rebuild
     if (!o) {
-      const model = buildPlayerModel(p.color);
-      o = { obj: model.root, model, x: p.x, z: p.z, f: p.f, px: p.x, pz: p.z, color: p.color };
+      const model = buildPlayerModel(p.color, p.skin);
+      o = { obj: model.root, model, x: p.x, z: p.z, f: p.f, px: p.x, pz: p.z, color: p.color, skin: p.skin || '' };
       scene.add(o.obj); vis.set(key, o);
     }
     o.seen = visFrame; o.seenT = T;
@@ -102,6 +102,7 @@ function syncVisuals(dt) {
       animateModel(o.model, dt, dodging ? 0 : spd, o.atkT > 0 ? o.atkT / 0.28 : 0, 0, T);
     }
     o.model.ring.material.opacity = 0.6 + 0.3 * Math.sin(T * 4);
+    buffGlow(o, p.bf);
   }
   // enemies
   for (const e of v.enemies) {
@@ -385,6 +386,7 @@ function handleEvent(a) {
     case 'cloud': cloudFx(a[1], a[2], a[3], a[4], a[5]); break;
     case 'spikeline': spikeLineFx(a[1], a[2], a[3], a[4], a[5]); break;
     case 'block': blockFx(a[1], a[2]); break;
+    case 'buff': case 'phoenix': shopEvent(a); break;
   }
 }
 
