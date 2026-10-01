@@ -144,7 +144,7 @@ function genDungeon(seed, floor) {
   const solids = [], traps = [], plates = [], shrines = [];
   const qOf = x => ((x % 8) + 8) % 8;
   const addTrap = (k, type, q) => { if (g[k] !== T_FLOOR || tt[k]) return; tt[k] = type; tq[k] = qOf(q); traps.push({ t: type, k, i: k % W, j: (k / W) | 0, q: qOf(q) }); };
-  const addSolid = (i, j, t) => { const k = j * W + i; if (g[k] !== T_FLOOR || corr[k] || nearKey(i, j, 2)) return false; g[k] = T_SOLID; solids.push({ t, i, j }); return true; };
+  const addSolid = (i, j, t, onCorr) => { const k = j * W + i; if (g[k] !== T_FLOOR || (corr[k] && !onCorr) || nearKey(i, j, 2)) return false; g[k] = T_SOLID; solids.push({ t, i, j }); return true; };
   const slowBlob = (ci, cj, rr) => {
     for (let j = Math.floor(cj - rr); j <= cj + rr; j++) for (let i = Math.floor(ci - rr); i <= ci + rr; i++) {
       if (!inside(i, j)) continue;
@@ -196,7 +196,7 @@ function genDungeon(seed, floor) {
         break;
       }
       case 'shrine': {
-        if (!addSolid(c.x, c.y, 'fountain')) break;
+        if (!addSolid(c.x, c.y, 'fountain', true)) break;
         for (let j = c.y - 3; j <= c.y + 3; j++) for (let i = c.x - 3; i <= c.x + 3; i++) {
           const k = j * W + i; if (inside(i, j) && g[k] === T_FLOOR && Math.hypot(i - c.x, j - c.y) <= 2.6) tt[k] = TT_SHRINE;
         }
@@ -447,7 +447,7 @@ function buildLevel(map, theme) {
       // texture on the surface
       if (glow && hash(i, j) < 0.25) L.add(shade(P.c, 0.25), 0.5 + hash(j, i), 0.12, 0.5 + hash(i + 1, j), x + (hash(i, j + 1) - 0.5), depth + 0.1, z + (hash(i + 2, j) - 0.5), hash(i, j) * 3);
       if (!glow && !sky && hash(i, j) < 0.3) L.add(P.c2, 0.8, 0.05, 0.12, x, depth + 0.11, z + (hash(j, i) - 0.5), 0);
-      if (sky && hash(i, j) < 0.35) { const cl = new THREE.Mesh(BOXG, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })); cl.scale.set(1.5 + hash(i, j) * 2, 0.6, 1.2 + hash(j, i)); cl.position.set(x, -6 - hash(i + 1, j) * 4, z); grp.add(cl); anim.clouds.push(cl); }
+      if (sky && hash(i, j) < 0.35) { const cl = new THREE.Mesh(BOXG, anim.cloudMat || (anim.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }))); cl.scale.set(1.5 + hash(i, j) * 2, 0.6, 1.2 + hash(j, i)); cl.position.set(x, -6 - hash(i + 1, j) * 4, z); grp.add(cl); anim.clouds.push(cl); }
     }
     if (sky) pit.visible = false;
     if (pit.instanceColor) pit.instanceColor.needsUpdate = true;

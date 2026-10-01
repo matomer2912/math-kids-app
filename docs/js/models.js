@@ -342,11 +342,14 @@ function buildEnemyModel(skin, theme, size) {
     case 'slime': { // bouncy cube slime with a darker core
       mdl = shell('slime', 0.6);
       const col = T.slime || 0x6ad83a;
-      bx(mdl.body, 1.0, 0.85, 1.0, 0, 0.43, 0, tm(mdl, col));
-      bx(mdl.body, 0.45, 0.4, 0.45, 0, 0.42, 0, tm(mdl, shade(col, 0.6)));
-      const eye = glowM(0x111111);
-      bx(mdl.body, 0.14, 0.18, 0.02, -0.2, 0.6, 0.51, eye); bx(mdl.body, 0.14, 0.18, 0.02, 0.2, 0.6, 0.51, eye);
-      bx(mdl.body, 0.3, 0.06, 0.02, 0, 0.38, 0.51, eye);
+      const jelly = tm(mdl, col); jelly.transparent = true; jelly.opacity = 0.62;
+      bx(mdl.body, 0.5, 0.45, 0.5, 0, 0.45, 0, tm(mdl, shade(col, 0.45))); // solid core seen through the jelly
+      bx(mdl.body, 1.0, 0.95, 1.0, 0, 0.48, 0, jelly);
+      const eye = glowM(0x111111), shine = glowM(0xffffff);
+      bx(mdl.body, 0.2, 0.22, 0.04, -0.22, 0.7, 0.5, eye); bx(mdl.body, 0.2, 0.22, 0.04, 0.22, 0.7, 0.5, eye);
+      bx(mdl.body, 0.07, 0.07, 0.05, -0.17, 0.76, 0.51, shine); bx(mdl.body, 0.07, 0.07, 0.05, 0.27, 0.76, 0.51, shine);
+      bx(mdl.body, 0.36, 0.07, 0.04, 0, 0.45, 0.5, eye);
+      bx(mdl.body, 0.25, 0.04, 0.25, 0.25, 0.96, -0.2, shine); // glossy highlight on top
       break;
     }
     case 'charger': { // armored beetle / boar with a big horn
