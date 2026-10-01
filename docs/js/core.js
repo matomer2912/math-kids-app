@@ -27,22 +27,115 @@ function equipped() { return Profile.inv[Profile.eq] || Profile.inv[0]; }
 function myStats() { return { lvl: Profile.lvl, wpn: equipped(), name: Profile.name || 'Hero', color: Profile.color, boosts: Profile.boosts, skin: Profile.skin || '', ph: Profile.pots.phoenix > 0 ? 1 : 0 }; }
 
 // ---------- renderer ----------
+// Linear colour pipeline: hex colours are sRGB and get converted to linear, lighting is done in linear
+// space, then ACES filmic tone mapping (per-world exposure) + sRGB output, all inside the material
+// shaders (no extra passes). Glowing things use toneMapped:false materials so they pop like bloom.
+THREE.ColorManagement.legacyMode = false;
+{ // cheaper PCF: 4 taps instead of three's 17 (the shadow map is sampled for every floor/wall pixel)
+  const c = THREE.ShaderChunk.shadowmap_pars_fragment, end = '( 1.0 / 17.0 );';
+  const a = c.indexOf('vec2 texelSize = vec2( 1.0 ) / shadowMapSize;'), b = c.indexOf(end, a);
+  if (a > 0 && b > a) THREE.ShaderChunk.shadowmap_pars_fragment = c.slice(0, a) + `vec2 o = vec2( 0.7 ) / shadowMapSize;
+			shadow = 0.25 * ( texture2DCompare( shadowMap, shadowCoord.xy + vec2( - o.x, - o.y ), shadowCoord.z ) + texture2DCompare( shadowMap, shadowCoord.xy + vec2( o.x, - o.y ), shadowCoord.z ) +
+				texture2DCompare( shadowMap, shadowCoord.xy + vec2( - o.x, o.y ), shadowCoord.z ) + texture2DCompare( shadowMap, shadowCoord.xy + vec2( o.x, o.y ), shadowCoord.z ) );` + c.slice(b + end.length);
+}
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1;
+renderer.shadowMap.enabled = false;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 let lowPower = localStorage.getItem('dd_low') === '1';
 let soundOn = localStorage.getItem('dd_snd') !== '0';
 // Pixel ratio: capped at 1.25 (sharp enough on phones, much cheaper than 2-3x); the main loop
 // steps prCap down automatically if frames are slow. Battery saver: 1.0 and a 30 fps cap.
 let prCap = 1.25;
-function applyPR() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? Math.min(1, prCap) : prCap)); }
-applyPR();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c130a);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 140);
-const CAM_OFF = new THREE.Vector3(0, 14.5, 9.5);
-camera.position.copy(CAM_OFF); camera.lookAt(0, 0, 0);
+// Camera: fixed orientation (pitch ~58°), only translates. CAM_OFF is the camera position relative to
+// the local hero; its z is recomputed in resize() so the hero sits near the middle of the visible ground
+// (with a perspective camera the ground below the look point is much shorter than above it).
+const CAM_H = 16.8, CAM_D = 10.5;                       // ~14% further than the old (14.5, 9.5)
+const CAM_OFF = new THREE.Vector3(0, CAM_H, CAM_D);
+camera.position.set(0, CAM_H, CAM_D); camera.lookAt(0, 0, 0);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.82); scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(-10, 25, 12); scene.add(sun);
+// "sun / moon": the only shadow caster; follows the hero with a tight orthographic frustum
+const sun = new THREE.DirectionalLight(0xffffff, 0.5); sun.position.set(-10, 25, 12); scene.add(sun); scene.add(sun.target);
+// Light from the west, a little from the camera side, ~45° up: shadows fall to the right where they are
+// visible (not hidden behind the characters) and fronts still catch some light.
+const SUN_OFF = new THREE.Vector3(-15, 17, 4);
+{ // size the orthographic shadow box to cover ~44 x 26 world units of floor around the view focus
+  const d = SUN_OFF.clone().normalize(), r = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), d).normalize(), u = new THREE.Vector3().crossVectors(d, r);
+  const hx = 22, hz = 13, hy = 3;
+  const sr = Math.abs(r.x) * hx + Math.abs(r.z) * hz + Math.abs(r.y) * hy, su = Math.abs(u.x) * hx + Math.abs(u.z) * hz + Math.abs(u.y) * hy;
+  Object.assign(sun.shadow.camera, { left: -sr, right: sr, top: su, bottom: -su, near: 2, far: 70 });
+}
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
+// soft light that follows the local hero (High only; lower tiers get a fake glow pool)
+const heroLight = new THREE.PointLight(0xffe6c8, 0.55, 10, 1.5); heroLight.position.set(0, 3.2, 0);
+// fixed pool of point lights moved to the torches / lava / crystals nearest the hero (count per tier is
+// constant, so moving between torches never changes the shader light count = no recompiles)
+const pointPool = [];
+
+// ---------- graphics quality tiers ----------
+const GFX_TIERS = {
+  high:   { shadow: 1024, soft: false, lights: 3, hero: true,  parts: 120, glow: 0.9 },
+  medium: { shadow: 512,  soft: false, lights: 1, hero: false, parts: 70,  glow: 1 },
+  low:    { shadow: 0,    soft: false, lights: 0, hero: false, parts: 0,   glow: 1.1 },
+};
+const GFX_ORDER = ['high', 'medium', 'low'];
+const GFX_LABEL = { high: 'High', medium: 'Medium', low: 'Low', auto: 'Auto' };
+const GFX = (() => {
+  let pref = 'auto';
+  try { pref = localStorage.getItem('dd_gfx') || 'auto'; } catch (e) { }
+  if (!GFX_LABEL[pref]) pref = 'auto';
+  const cores = navigator.hardwareConcurrency || 8, mem = navigator.deviceMemory || 8;
+  const lowEnd = cores <= 4 || mem <= 3 || Math.min(screen.width, screen.height) * (devicePixelRatio || 1) < 600;
+  return { pref, auto: lowEnd ? 'medium' : 'high', q: null, T: GFX_TIERS.low, ver: 0, steps: 0 };
+})();
+function gfxTier() { return lowPower ? 'low' : GFX.pref === 'auto' ? GFX.auto : GFX.pref; }
+function gfxApply(force) {
+  const q = gfxTier();
+  if (q === GFX.q && !force) return;
+  const T = GFX.T = GFX_TIERS[q];
+  GFX.q = q; GFX.ver++;
+  renderer.shadowMap.enabled = T.shadow > 0;
+  renderer.shadowMap.type = T.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  sun.castShadow = T.shadow > 0;
+  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  if (T.shadow) sun.shadow.mapSize.set(T.shadow, T.shadow);
+  if (typeof SHADOW_MAT !== 'undefined') SHADOW_MAT.visible = !T.shadow; // blob shadows only without real ones
+  while (pointPool.length > T.lights) { const p = pointPool.pop(); scene.remove(p.light); }
+  while (pointPool.length < T.lights) { const l = new THREE.PointLight(0xffaa55, 0, 9, 2); l.position.set(0, -50, 0); scene.add(l); pointPool.push({ light: l, c: null, k: 0, out: false }); }
+  if (T.hero) scene.add(heroLight); else scene.remove(heroLight);
+  scene.traverse(o => { if (o.material) for (const m of (Array.isArray(o.material) ? o.material : [o.material])) m.needsUpdate = true; });
+  if (typeof onGfxChange === 'function') onGfxChange();
+  gfxLabel();
+}
+function gfxLabel() {
+  const b = $('gfxBtn'); if (!b) return;
+  const auto = GFX.pref === 'auto' && !lowPower;
+  b.querySelector('.tl').innerHTML = 'Graphics<br><b>' + (lowPower ? 'Low (battery)' : GFX_LABEL[GFX.pref] + (auto ? ' · ' + GFX_LABEL[GFX.q] : '')) + '</b>';
+}
+// pause-menu button cycles Auto -> High -> Medium -> Low
+if ($('gfxBtn')) $('gfxBtn').onclick = () => {
+  const order = ['auto', 'high', 'medium', 'low'];
+  GFX.pref = order[(order.indexOf(GFX.pref) + 1) % order.length];
+  if (GFX.pref === 'auto') { GFX.auto = 'high'; GFX.steps = 0; }
+  try { localStorage.setItem('dd_gfx', GFX.pref); } catch (e) { }
+  gfxApply(); gfxLabel();
+};
+// Called by the main loop's perf monitor with the average frame time over ~4 s. In Auto mode, step the
+// quality tier down first (High -> Medium -> Low), then the pixel ratio (1.25 -> 1.0 -> 0.85).
+function gfxPerf(avg) {
+  if (lowPower || avg <= 22) return;
+  if (GFX.pref === 'auto' && GFX.auto !== 'low') { GFX.auto = GFX_ORDER[GFX_ORDER.indexOf(GFX.auto) + 1]; GFX.steps++; gfxApply(); return; }
+  if (avg > 24 && prCap > 0.85) { prCap = prCap > 1 ? 1 : 0.85; applyPR(); resize(); }
+}
+function applyPR() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? Math.min(1, prCap) : prCap)); gfxApply(); }
+applyPR();
+
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
@@ -50,8 +143,28 @@ function resize() {
   // keep a similar horizontal view on narrow screens
   camera.fov = w / h < 1.3 ? 60 : 45;
   camera.updateProjectionMatrix();
+  // put the hero ~75% of the way to the middle of the visible ground strip (more view towards the bottom:
+  // ~11 units above / ~9.7 below the hero at 45° fov, was 11.8 / 6.8)
+  const p = Math.atan2(CAM_H, CAM_D), v = THREE.MathUtils.degToRad(camera.fov / 2);
+  const far = CAM_H / Math.tan(Math.max(0.2, p - v)), near = CAM_H / Math.tan(Math.min(1.5, p + v));
+  CAM_OFF.z = CAM_D + 0.75 * ((far + near) / 2 - CAM_D);
+  if (typeof onResizeGfx === 'function') onResizeGfx();
 }
 addEventListener('resize', resize); resize();
+
+// per-world lighting: exposure, light colours, fog, background, CSS vignette tint
+const GFX_DEF = { exp: 1.0, hemi: 0.8, sun: [0xfff2dd, 1.0], fog: [26, 50], amb: 'dust', vig: 'rgba(0,0,0,.5)' };
+function applyThemeLighting(T) {
+  const L = Object.assign({}, GFX_DEF, T.gfx || {});
+  scene.background = new THREE.Color(T.voidc);
+  scene.fog = new THREE.Fog(T.voidc, L.fog[0], L.fog[1]);
+  hemi.color.setHex(T.hemi); hemi.groundColor.setHex(T.ground); hemi.intensity = L.hemi;
+  sun.color.setHex(L.sun[0]); sun.intensity = L.sun[1];
+  heroLight.color.setHex(L.hero || 0xffe6c8);
+  renderer.toneMappingExposure = L.exp;
+  document.documentElement.style.setProperty('--vig', L.vig);
+  GFX.L = L;
+}
 
 // ---------- game state ----------
 const G = { role: null, inGame: false, floor: 1, seed: 0, map: null, level: null, theme: THEMES[0], myId: 0, view: null, snap: null, paused: false, time: 0, shake: 0, startFloor: 1, banner: 0 };

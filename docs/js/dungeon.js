@@ -366,37 +366,187 @@ function tileOf(map, x, z) { return Math.floor(z / TILE) * map.W + Math.floor(x 
 
 // ---------- level mesh ----------
 const _m4 = new THREE.Matrix4(), _col = new THREE.Color(), _q = new THREE.Quaternion(), _v3 = new THREE.Vector3(), _s3 = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
-// collects lots of boxes and turns them into one InstancedMesh (one draw call)
-function BoxBatch(mat) {
+// Collects lots of boxes and turns them into InstancedMeshes, one per 10x10-tile chunk (and per
+// flat/tall split when opt.shadow is set). Each chunk gets a cloned box geometry carrying the chunk's
+// bounding sphere, so both the camera and the shadow pass cull whole chunks (r149 culls instanced
+// meshes by geometry bounds only). Flat pieces (floor tiles, carpets) only receive shadows; tall ones
+// (walls, statues, props) cast and receive.
+const CHUNK = 20;
+function BoxBatch(mat, opt) {
   const list = [];
+  const shadow = !!(opt && opt.shadow);
   return {
     list,
     add(color, sx, sy, sz, x, y, z, ry, vary) { list.push([color, sx, sy, sz, x, y, z, ry || 0, vary || 0]); },
     build(grp, rng) {
       if (!list.length) return null;
-      const m = new THREE.InstancedMesh(BOXG, mat, list.length);
-      list.forEach((b, n) => {
-        _q.setFromAxisAngle(_up, b[7]); _s3.set(b[1], b[2], b[3]); _v3.set(b[4], b[5], b[6]);
-        _m4.compose(_v3, _q, _s3); m.setMatrixAt(n, _m4);
-        _col.setHex(b[0]); if (b[8] && rng) _col.offsetHSL(0, 0, (rng() - 0.5) * b[8]);
-        m.setColorAt(n, _col);
-      });
-      m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
-      m.frustumCulled = false;
-      grp.add(m);
-      return m;
+      const groups = new Map();
+      for (const b of list) {
+        const flat = shadow && b[5] + b[2] / 2 <= 0.36;
+        const key = Math.floor(b[4] / CHUNK) * 4096 + Math.floor(b[6] / CHUNK) + (flat ? 0.5 : 0);
+        let g = groups.get(key); if (!g) groups.set(key, g = { flat, list: [] });
+        g.list.push(b);
+      }
+      const out = [];
+      for (const g of groups.values()) {
+        const geo = BOXG.clone();
+        const m = new THREE.InstancedMesh(geo, mat, g.list.length);
+        let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+        g.list.forEach((b, n) => {
+          _q.setFromAxisAngle(_up, b[7]); _s3.set(b[1], b[2], b[3]); _v3.set(b[4], b[5], b[6]);
+          _m4.compose(_v3, _q, _s3); m.setMatrixAt(n, _m4);
+          _col.setHex(b[0]); if (b[8] && rng) _col.offsetHSL(0, 0, (rng() - 0.5) * b[8]);
+          m.setColorAt(n, _col);
+          const r = 0.5 * Math.hypot(b[1], b[2], b[3]);
+          x0 = Math.min(x0, b[4] - r); x1 = Math.max(x1, b[4] + r); y0 = Math.min(y0, b[5] - r); y1 = Math.max(y1, b[5] + r); z0 = Math.min(z0, b[6] - r); z1 = Math.max(z1, b[6] + r);
+        });
+        geo.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), 0.5 * Math.hypot(x1 - x0, y1 - y0, z1 - z0));
+        m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        m.frustumCulled = true; // r149 InstancedMesh defaults to false
+        if (shadow) { m.receiveShadow = true; m.castShadow = !g.flat; }
+        grp.add(m); out.push(m);
+      }
+      return out;
     },
   };
 }
-const shade = (hex, k) => new THREE.Color(hex).multiplyScalar(k).getHex();
-const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
+// colour helpers work on the sRGB hex values (same look as before the linear colour pipeline)
+const shade = (hex, k) => { const c = n => Math.min(255, Math.round(((hex >> n) & 255) * k)); return (c(16) << 16) | (c(8) << 8) | c(0); };
+const mix = (a, b, t) => { const c = n => Math.round(((a >> n) & 255) * (1 - t) + ((b >> n) & 255) * t); return (c(16) << 16) | (c(8) << 8) | c(0); };
+
+// Level surfaces skip the point-light loop (the point-light pool lights characters/props only; floors and
+// walls get the cheap glow decals instead). Point lights are per-fragment in r149 Lambert, and the level
+// covers ~90% of the screen, so this keeps the real lights almost free.
+const LVL_LIGHTS = THREE.ShaderChunk.lights_fragment_begin.replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0');
+function levelMat(m) {
+  m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', LVL_LIGHTS); };
+  m.customProgramCacheKey = () => 'lvl';
+  return m;
+}
+
+// ---------- fake lighting: additive glow decals (light pools on floors/walls, halos) ----------
+// One InstancedMesh of quads for the whole level, radial falloff computed in the shader (no texture),
+// per-instance colour + flicker phase, faded out with distance like fog. Costs one draw call.
+const GLOW_PLANE = new THREE.PlaneGeometry(1, 1); // template only (each level clones it)
+function makeGlowMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uGain: { value: 1 }, uFogN: { value: 24 }, uFogF: { value: 50 }, uColor: { value: new THREE.Color(1, 1, 1) } },
+    vertexShader: `uniform float uTime, uFogN, uFogF; uniform vec3 uColor; attribute vec2 aGlow; varying vec2 vUv; varying vec3 vCol; varying float vA;
+      void main() {
+        vUv = uv; vCol = uColor;
+        #ifdef USE_INSTANCING_COLOR
+        vCol *= instanceColor;
+        #endif
+        #ifdef USE_INSTANCING
+        vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        #else
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        #endif
+        float f = 1.0 + aGlow.y * (0.6 * sin(uTime * 9.0 + aGlow.x) + 0.4 * sin(uTime * 14.3 + aGlow.x * 1.7));
+        vA = f * (1.0 - smoothstep(uFogN, uFogF, -mv.z));
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float uGain; varying vec2 vUv; varying vec3 vCol; varying float vA;
+      void main() {
+        vec2 d = vUv - 0.5; float a = max(0.0, 1.0 - 4.0 * dot(d, d)); a *= a;
+        float m = max(max(vCol.r, vCol.g), max(vCol.b, 1e-4));            // intensity (linear scale)
+        vec3 hue = linearToOutputTexel(vec4(vCol / m, 1.0)).rgb;           // colour in display space
+        gl_FragColor = vec4(hue * (m * a * vA * uGain), 1.0);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+  });
+}
+// kind: 0 floor pool, 1 wall glow (faces +z), 2 camera-facing halo
+function buildGlows(grp, list) {
+  if (!list.length) return null;
+  const ph = new Float32Array(list.length * 2);
+  const geo = GLOW_PLANE.clone();
+  geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(ph, 2)); // per-instance flicker phase + amount
+  const m = new THREE.InstancedMesh(geo, makeGlowMaterial(), list.length);
+  const camQ = typeof camera !== 'undefined' ? camera.quaternion : new THREE.Quaternion();
+  const flatQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2), noQ = new THREE.Quaternion();
+  list.forEach((g, n) => {
+    _v3.set(g.x, g.y, g.z); _s3.set(g.sx, g.sy || g.sx, 1);
+    _m4.compose(_v3, g.k === 0 ? flatQ : g.k === 1 ? noQ : camQ, _s3); m.setMatrixAt(n, _m4);
+    _col.setHex(g.c).multiplyScalar(g.i); m.setColorAt(n, _col);
+    ph[n * 2] = g.ph; ph[n * 2 + 1] = g.fl;
+  });
+  m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  m.frustumCulled = false; m.renderOrder = 2;
+  grp.add(m);
+  return m;
+}
+
+// ---------- ambient particles (one THREE.Points per level, wraps around the hero in the shader) ----------
+const AMB = {
+  dust:  { c: 0xffe2a0, n: 1,   s: 0.16, v: [0.25, 0.08, 0.1],  sw: 0.5, add: 1, a: 0.55, y: [0.2, 5] },
+  wisp:  { c: 0xb8a8ff, n: 0.8, s: 0.22, v: [0.1, 0.18, 0.05],  sw: 0.6, add: 1, a: 0.45, y: [0.2, 4] },
+  leaf:  { c: 0x7ad04a, n: 0.6, s: 0.22, v: [0.5, -0.7, 0.2],   sw: 1.2, add: 0, a: 0.9,  y: [0, 7], sq: 1 },
+  ember: { c: 0xff7a1a, n: 1,   s: 0.14, v: [0.1, 1.1, -0.15],  sw: 0.6, add: 1, a: 0.9,  y: [0, 6] },
+  snow:  { c: 0xffffff, n: 1.1, s: 0.15, v: [0.3, -1.0, 0.15],  sw: 0.7, add: 0, a: 0.85, y: [0, 8] },
+  cloud: { c: 0xffffff, n: 0.3, s: 2.6,  v: [0.6, 0.0, 0.1],    sw: 0.2, add: 0, a: 0.16, y: [-2.5, 1.5] },
+  spore: { c: 0x9affd8, n: 1,   s: 0.16, v: [0.05, 0.35, 0.05], sw: 0.8, add: 1, a: 0.8,  y: [0.2, 5], c2: 0xe07aff },
+  mist:  { c: 0xbfefff, n: 0.8, s: 0.18, v: [0.4, 0.12, 0.0],   sw: 0.5, add: 1, a: 0.4,  y: [0.2, 4] },
+};
+const AMB_MAX = 140, AMB_BOX = [44, 0, 32];
+function buildAmbient(grp, theme) {
+  const A = AMB[(theme.gfx && theme.gfx.amb) || 'dust'] || AMB.dust;
+  const n = AMB_MAX, pos = new Float32Array(n * 3), rnd = new Float32Array(n * 2);
+  const r = RNG(1234567);
+  for (let i = 0; i < n; i++) {
+    pos[i * 3] = r() * AMB_BOX[0]; pos[i * 3 + 1] = A.y[0] + r() * (A.y[1] - A.y[0]); pos[i * 3 + 2] = r() * AMB_BOX[2];
+    rnd[i * 2] = r() * 6.283; rnd[i * 2 + 1] = r();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 2));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+  const c1 = new THREE.Color(A.c), c2 = new THREE.Color(A.c2 || A.c);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uScale: { value: 400 }, uFogF: { value: 50 },
+      uVel: { value: new THREE.Vector3().fromArray(A.v) }, uSize: { value: A.s * A.n }, uSway: { value: A.sw }, uA: { value: A.a },
+      uC1: { value: c1 }, uC2: { value: c2 }, uYr: { value: new THREE.Vector2(A.y[0], A.y[1] - A.y[0]) } },
+    vertexShader: `uniform float uTime, uScale, uSize, uSway, uFogF; uniform vec3 uCenter, uVel; uniform vec2 uYr; attribute vec2 aRnd; varying float vA; varying float vMix;
+      void main() {
+        vec3 box = vec3(${AMB_BOX[0].toFixed(1)}, uYr.y, ${AMB_BOX[2].toFixed(1)});
+        vec3 p = position + uVel * uTime * (0.6 + 0.8 * aRnd.y);
+        p.x += uSway * sin(uTime * (0.7 + aRnd.y) + aRnd.x);
+        p.z += uSway * 0.6 * cos(uTime * (0.5 + aRnd.y * 0.7) + aRnd.x * 1.3);
+        vec2 o = uCenter.xz - box.xz * 0.5;
+        p.x = mod(p.x - o.x, box.x) + o.x;
+        p.z = mod(p.z - o.y, box.z) + o.y;
+        p.y = mod(p.y - uYr.x, uYr.y) + uYr.x;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        float tw = 0.65 + 0.35 * sin(uTime * 2.3 + aRnd.x * 3.0);
+        vec3 rel = (p - uCenter) / (box * 0.5);
+        float edge = 1.0 - smoothstep(0.7, 1.0, max(abs(rel.x), abs(rel.z)));
+        vA = tw * edge * (1.0 - smoothstep(uFogF * 0.7, uFogF, -mv.z));
+        vMix = aRnd.y;
+        gl_PointSize = uSize * uScale / -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float uA; uniform vec3 uC1, uC2; varying float vA; varying float vMix;
+      void main() {
+        vec2 d = gl_PointCoord - 0.5;
+        ${A.sq ? 'float a = step(abs(d.x) + abs(d.y), 0.5);' : 'float a = max(0.0, 1.0 - 4.0 * dot(d, d)); a *= a;'}
+        vec3 c = mix(uC1, uC2, step(0.5, vMix));
+        gl_FragColor = vec4(linearToOutputTexel(vec4(c, 1.0)).rgb, a * vA * uA);
+        ${A.add ? 'gl_FragColor.rgb *= gl_FragColor.a; gl_FragColor.a = 1.0;' : ''}
+      }`,
+    transparent: true, depthWrite: false, blending: A.add ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false; pts.renderOrder = 3;
+  grp.add(pts);
+  return pts;
+}
 
 function buildLevel(map, theme) {
   const grp = new THREE.Group();
   const { W, H, g, tt } = map;
   const rng = RNG(map.seed ^ 0x9e3779b9);
-  const L = BoxBatch(new THREE.MeshLambertMaterial());           // lit static boxes
-  const E = BoxBatch(new THREE.MeshBasicMaterial());             // glowing static boxes
+  const L = BoxBatch(levelMat(new THREE.MeshLambertMaterial()), { shadow: true }); // lit static boxes (walls/props cast shadows)
+  const E = BoxBatch(new THREE.MeshBasicMaterial({ toneMapped: false })); // glowing static boxes (not tone mapped = they pop)
   const A = BoxBatch(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.45, depthWrite: false })); // translucent overlays
   const anim = { spikes: [], vents: [], glow: [], torches: null, shrine: [], clouds: [] };
   const deco = theme.deco, P = theme.pit;
@@ -405,6 +555,10 @@ function buildLevel(map, theme) {
   const roomOf = k => map.rid && map.rid[k] >= 0 ? map.rooms[map.rid[k]] : null;
   const hash = (i, j) => { let h = (i * 374761393 + j * 668265263) ^ map.seed; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   const blob = (i, j, s) => (hash(Math.floor(i / s), Math.floor(j / s)) + hash(Math.floor((i + 2) / s), Math.floor((j + 1) / s))) / 2;
+  // fake light: glow decals (k 0 floor pool, 1 wall wash, 2 halo) + candidate spots for the real point-light pool
+  const glows = [], lights = [], LC = theme.light;
+  const glow = (k, x, y, z, sx, sy, c, i, fl) => glows.push({ k, x, y, z, sx, sy, c, i, fl: fl === undefined ? 0.1 : fl, ph: (glows.length * 2.399) % 6.283 });
+  const light = (x, y, z, c, i, d) => lights.push({ x, y, z, c, i, d });
 
   // ---- floor tiles ----
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
@@ -469,9 +623,9 @@ function buildLevel(map, theme) {
   let nPit = 0;
   for (let k = 0; k < W * H; k++) if (g[k] === T_PIT) nPit++;
   if (nPit) {
-    const glow = !!P.glow, sky = !!P.sky;
-    const depth = glow ? -0.55 : sky ? -30 : deco === 'crypt' ? -4.5 : -1.6;
-    const pm = glow ? new THREE.MeshBasicMaterial({ color: P.c }) : new THREE.MeshLambertMaterial({ color: P.c });
+    const hot = !!P.glow, sky = !!P.sky;
+    const depth = hot ? -0.55 : sky ? -30 : deco === 'crypt' ? -4.5 : -1.6;
+    const pm = hot ? new THREE.MeshBasicMaterial({ color: P.c, toneMapped: false }) : levelMat(new THREE.MeshLambertMaterial({ color: P.c }));
     const pit = new THREE.InstancedMesh(BOXG, pm, nPit); pit.frustumCulled = false;
     let n = 0;
     for (let k = 0; k < W * H; k++) {
@@ -480,15 +634,17 @@ function buildLevel(map, theme) {
       _m4.makeScale(TILE, 0.2, TILE); _m4.setPosition(x, depth, z);
       pit.setMatrixAt(n, _m4); _col.setHex(sky ? 0xffffff : P.c); _col.offsetHSL(0, 0, (rng() - 0.5) * 0.06); pit.setColorAt(n++, _col);
       // texture on the surface
-      if (glow && hash(i, j) < 0.25) L.add(shade(P.c, 0.25), 0.5 + hash(j, i), 0.12, 0.5 + hash(i + 1, j), x + (hash(i, j + 1) - 0.5), depth + 0.1, z + (hash(i + 2, j) - 0.5), hash(i, j) * 3);
-      if (!glow && !sky && hash(i, j) < 0.3) L.add(P.c2, 0.8, 0.05, 0.12, x, depth + 0.11, z + (hash(j, i) - 0.5), 0);
-      if (sky && hash(i, j) < 0.35) { const cl = new THREE.Mesh(BOXG, anim.cloudMat || (anim.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }))); cl.scale.set(1.5 + hash(i, j) * 2, 0.6, 1.2 + hash(j, i)); cl.position.set(x, -6 - hash(i + 1, j) * 4, z); grp.add(cl); anim.clouds.push(cl); }
+      if (hot && hash(i + 3, j + 7) < 0.1) glow(0, x, 0.07, z, 6.5, 6.5, P.c, 0.3, 0.04);
+      if (hot && hash(i + 9, j + 2) < 0.06) light(x, 1.3, z, P.c, 1.5, 11);
+      if (hot && hash(i, j) < 0.25) L.add(shade(P.c, 0.25), 0.5 + hash(j, i), 0.12, 0.5 + hash(i + 1, j), x + (hash(i, j + 1) - 0.5), depth + 0.1, z + (hash(i + 2, j) - 0.5), hash(i, j) * 3);
+      if (!hot && !sky && hash(i, j) < 0.3) L.add(P.c2, 0.8, 0.05, 0.12, x, depth + 0.11, z + (hash(j, i) - 0.5), 0);
+      if (sky && hash(i, j) < 0.35) { const cl = new THREE.Mesh(BOXG, anim.cloudMat || (anim.cloudMat = levelMat(new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })))); cl.scale.set(1.5 + hash(i, j) * 2, 0.6, 1.2 + hash(j, i)); cl.position.set(x, -6 - hash(i + 1, j) * 4, z); grp.add(cl); anim.clouds.push(cl); }
     }
     if (sky) pit.visible = false;
     if (pit.instanceColor) pit.instanceColor.needsUpdate = true;
     pit.instanceMatrix.needsUpdate = true;
     grp.add(pit);
-    if (glow) anim.glow.push({ mat: pm, c: P.c, c2: P.c2 });
+    if (hot) anim.glow.push({ mat: pm, c: P.c, c2: P.c2 });
   }
 
   // ---- walls ----
@@ -511,19 +667,23 @@ function buildLevel(map, theme) {
     L.add(wc, TILE, hh, TILE, x, hh / 2, z, 0, 0.08);
     L.add(theme.top, TILE * 1.001, 0.12, TILE * 1.001, x, hh + 0.06, z, 0, 0.05);
     if (st === 'brick' && front) { L.add(shade(theme.wall, 0.8), TILE * 1.002, 0.08, 0.04, x, 0.7, z + 1.0); L.add(shade(theme.wall, 0.8), TILE * 1.002, 0.08, 0.04, x, 1.4, z + 1.0); }
-    if (st === 'basalt' && front && hash(i, j + 1) < 0.2) E.add(0xff5a00, 0.08, hh * 0.7, 0.04, x + (hash(i, j) - 0.5) * 1.2, hh * 0.4, z + 1.01);
+    if (st === 'basalt' && front && hash(i, j + 1) < 0.2) { E.add(0xff5a00, 0.08, hh * 0.7, 0.04, x + (hash(i, j) - 0.5) * 1.2, hh * 0.4, z + 1.01); glow(1, x, hh * 0.45, z + 1.03, 1.6, 1.8, 0xff5a00, 0.3, 0.05); }
   }
 
   // ---- wall decorations (on camera-facing walls) ----
   const torches = map.deco.filter(d => d.t === 'torch');
   if (torches.length) {
-    const flame = new THREE.InstancedMesh(BOXG, new THREE.MeshBasicMaterial({ color: theme.light }), torches.length);
+    const flame = new THREE.InstancedMesh(BOXG, new THREE.MeshBasicMaterial({ color: theme.light, toneMapped: false }), torches.length);
     flame.frustumCulled = false;
     torches.forEach((d, n) => {
       const x = (d.i + 0.5) * TILE, z = (d.j + 1) * TILE + 0.12;
       L.add(0x4a3420, 0.2, 0.5, 0.2, x, 1.3, z);
       L.add(0x2a2018, 0.4, 0.08, 0.3, x, 1.55, z);
       _m4.makeScale(0.3, 0.35, 0.3); _m4.setPosition(x, 1.72, z); flame.setMatrixAt(n, _m4);
+      glow(1, x, 1.25, z - 0.08, 3.6, 2.5, LC, 0.5, 0.14);     // warm wash on the wall
+      glow(0, x, 0.05, z + 1.4, 5.6, 4.6, LC, 0.4, 0.12);      // light pool on the floor
+      glow(2, x, 1.78, z + 0.12, 1.5, 1.5, LC, 0.75, 0.22);    // flame halo
+      light(x, 2.0, z + 0.9, LC, 1.7, 10);
     });
     grp.add(flame);
     anim.torches = flame;
@@ -537,26 +697,28 @@ function buildLevel(map, theme) {
         else { L.add(shade(theme.wall, 0.75), 1.2, 0.8, 0.04, x, 1.2, z); for (let s = 0; s < 3; s++) L.add(0x3a2a1a, 0.15, 0.2, 0.05, x - 0.35 + s * 0.35, 1.2 + (s & 1) * 0.15, z + 0.01); }
         break;
       case 'bone': // crypt: skulls and purple drapes
-        if (v < 0.5) { L.add(0xe9e9e0, 0.36, 0.32, 0.3, x, 1.2, z + 0.12); E.add(0xff3030, 0.08, 0.06, 0.02, x - 0.08, 1.24, z + 0.28); E.add(0xff3030, 0.08, 0.06, 0.02, x + 0.08, 1.24, z + 0.28); L.add(0xe9e9e0, 0.7, 0.08, 0.1, x, 0.95, z + 0.05, 0.5); L.add(0xe9e9e0, 0.7, 0.08, 0.1, x, 0.95, z + 0.05, -0.5); }
+        if (v < 0.5) { glow(2, x, 1.24, z + 0.32, 0.7, 0.45, 0xff3030, 0.5, 0.15); L.add(0xe9e9e0, 0.36, 0.32, 0.3, x, 1.2, z + 0.12); E.add(0xff3030, 0.08, 0.06, 0.02, x - 0.08, 1.24, z + 0.28); E.add(0xff3030, 0.08, 0.06, 0.02, x + 0.08, 1.24, z + 0.28); L.add(0xe9e9e0, 0.7, 0.08, 0.1, x, 0.95, z + 0.05, 0.5); L.add(0xe9e9e0, 0.7, 0.08, 0.1, x, 0.95, z + 0.05, -0.5); }
         else { L.add(theme.accent, 1.0, 1.4, 0.05, x, 1.2, z); L.add(0xc9a227, 1.05, 0.1, 0.07, x, 1.9, z); }
         break;
       case 'vine': // jungle: hanging vines + leaves
         for (let s = 0; s < 3; s++) { const hx = x - 0.6 + s * 0.6 + (v - 0.5) * 0.2, len = 0.8 + hash(d.i + s, d.j) * 1.2; L.add(0x2f7a2a, 0.12, len, 0.06, hx, 2.0 - len / 2, z); L.add(0x4fa83a, 0.3, 0.2, 0.08, hx, 2.0 - len, z + 0.02); }
-        if (v < 0.25) { L.add(0x9a7a4a, 0.6, 0.6, 0.06, x, 1.2, z); E.add(0x3dff8a, 0.12, 0.08, 0.02, x - 0.12, 1.3, z + 0.04); E.add(0x3dff8a, 0.12, 0.08, 0.02, x + 0.12, 1.3, z + 0.04); }
+        if (v < 0.25) { glow(2, x, 1.3, z + 0.06, 0.9, 0.5, 0x3dff8a, 0.45, 0.08); L.add(0x9a7a4a, 0.6, 0.6, 0.06, x, 1.2, z); E.add(0x3dff8a, 0.12, 0.08, 0.02, x - 0.12, 1.3, z + 0.04); E.add(0x3dff8a, 0.12, 0.08, 0.02, x + 0.12, 1.3, z + 0.04); }
         break;
       case 'basalt': // lava: glowing cracks and iron chains
-        if (v < 0.5) { E.add(0xff6a00, 0.1, 1.2, 0.03, x - 0.3, 1.0, z, 0.3); E.add(0xff8a00, 0.1, 0.8, 0.03, x + 0.2, 1.2, z, -0.4); }
+        if (v < 0.5) { glow(1, x, 1.05, z + 0.02, 2.0, 2.0, 0xff6a00, 0.32, 0.06); E.add(0xff6a00, 0.1, 1.2, 0.03, x - 0.3, 1.0, z, 0.3); E.add(0xff8a00, 0.1, 0.8, 0.03, x + 0.2, 1.2, z, -0.4); }
         else { for (let s = 0; s < 5; s++) L.add(0x2a2a2e, 0.12, 0.16, 0.12, x, 1.9 - s * 0.2, z + 0.06, s * 0.8); L.add(0x3a3a40, 0.3, 0.3, 0.12, x, 0.95, z + 0.06); }
         break;
       case 'crystal': // frost: icy crystal clusters
+        glow(1, x, 0.75, z + 0.03, 2.2, 1.7, 0x7fe8ff, 0.32, 0.02); glow(0, x, 0.05, z + 1.0, 3.2, 2.4, 0x7fe8ff, 0.22, 0.02);
         E.add(0x9ff0ff, 0.25, 0.9, 0.25, x - 0.2, 0.6, z + 0.1, 0.4); E.add(0xdffaff, 0.18, 0.6, 0.18, x + 0.15, 0.45, z + 0.12, -0.3); L.add(0xdcefff, 0.8, 0.12, 0.3, x, 1.95, z + 0.05);
         for (let s = 0; s < 3; s++) L.add(0xeaf8ff, 0.1, 0.35 + s * 0.1, 0.1, x - 0.4 + s * 0.4, 1.8 - s * 0.05, z + 0.05);
         break;
       case 'banner': // sky castle: royal banners and windows
         if (v < 0.55) { L.add(theme.carpet, 0.8, 1.5, 0.05, x, 1.15, z); L.add(0xffc72c, 0.85, 0.1, 0.07, x, 1.9, z); L.add(0xffc72c, 0.3, 0.3, 0.07, x, 1.25, z + 0.01, 0.785); }
-        else { E.add(0xbfe4ff, 0.7, 1.0, 0.04, x, 1.2, z); L.add(0xffffff, 0.08, 1.0, 0.06, x, 1.2, z + 0.01); L.add(0xffffff, 0.7, 0.08, 0.06, x, 1.2, z + 0.01); }
+        else { glow(1, x, 1.2, z + 0.05, 1.9, 1.9, 0xcfeaff, 0.3, 0); glow(0, x, 0.05, z + 1.5, 2.2, 3.4, 0xe0f0ff, 0.22, 0); E.add(0xbfe4ff, 0.7, 1.0, 0.04, x, 1.2, z); L.add(0xffffff, 0.08, 1.0, 0.06, x, 1.2, z + 0.01); L.add(0xffffff, 0.7, 0.08, 0.06, x, 1.2, z + 0.01); }
         break;
       case 'glow': // mushroom: glowing shelf fungus
+        glow(1, x, 1.0 + v * 0.3, z + 0.18, 2.2, 2.2, v < 0.5 ? 0x3affc0 : 0xd05aff, 0.3, 0.04);
         for (let s = 0; s < 3; s++) { const c = s & 1 ? 0x3affc0 : 0xd05aff; E.add(c, 0.5 - s * 0.08, 0.08, 0.35, x - 0.4 + s * 0.4, 0.6 + s * 0.45 + v * 0.3, z + 0.15); }
         break;
       case 'cave': // pirate: lanterns, anchors, nets
@@ -584,6 +746,7 @@ function buildLevel(map, theme) {
     const kd = kinds[Math.floor(p.v * kinds.length)];
     const x = (p.i + 0.5) * TILE, z = (p.j + 0.5) * TILE;
     (glowProp(kd) ? E : L).add(kd[0], kd[1], kd[2], kd[3], x, kd[2] / 2 + 0.01, z, p.rot, 0.06);
+    if (glowProp(kd)) glow(0, x, 0.06, z, 2.6, 2.6, kd[0], 0.26, 0.05);
     if (deco === 'mushroom' && kd[2] > 0.35) E.add(kd[0], kd[1] * 2.4, 0.15, kd[1] * 2.4, x, kd[2] + 0.05, z, p.rot); // little mushroom caps
     if (deco === 'jungle' && kd[1] === 0.3) L.add(0x3fa83a, 0.9, 0.08, 0.3, x, 1.1, z, p.rot);
   }
@@ -596,7 +759,8 @@ function buildLevel(map, theme) {
         L.add(0x9aa4b0, 1.9, 0.5, 1.9, x, 0.25, z); L.add(0x9aa4b0, 1.9, 0.5, 1.9, x, 0.25, z, 0.785);
         E.add(0x6fd8ff, 1.6, 0.06, 1.6, x, 0.5, z); E.add(0x6fd8ff, 1.6, 0.06, 1.6, x, 0.5, z, 0.785);
         L.add(0xc0c8d0, 0.4, 1.3, 0.4, x, 0.9, z);
-        anim.shrine.push(Object.assign(new THREE.Mesh(BOXG, new THREE.MeshBasicMaterial({ color: 0x9ff7ff })), {}));
+        glow(0, x, 0.06, z, 6.5, 6.5, 0x6fd8ff, 0.26, 0.03); glow(2, x, 1.9, z, 1.8, 1.8, 0x9ff7ff, 0.6, 0.05); light(x, 2.2, z, 0x7fe8ff, 1.4, 10);
+        anim.shrine.push(Object.assign(new THREE.Mesh(BOXG, new THREE.MeshBasicMaterial({ color: 0x9ff7ff, toneMapped: false })), {}));
         { const gem = anim.shrine[anim.shrine.length - 1]; gem.scale.setScalar(0.45); gem.position.set(x, 1.9, z); gem.rotation.set(0.6, 0, 0.6); grp.add(gem);
           const ring = new THREE.Mesh(new THREE.RingGeometry(2.6 * TILE - 0.25, 2.6 * TILE, 40), new THREE.MeshBasicMaterial({ color: 0x7dffb0, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
           ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.04, z); grp.add(ring); gem.userData.ring = ring; }
@@ -608,10 +772,10 @@ function buildLevel(map, theme) {
         break;
       case 'obelisk': L.add(0xd8b878, 1.1, 0.4, 1.1, x, 0.2, z); L.add(0xc9a663, 0.75, 2.6, 0.75, x, 1.6, z); L.add(0xffc72c, 0.5, 0.4, 0.5, x, 3.0, z, 0.785); L.add(0x2f6fd6, 0.4, 0.4, 0.05, x, 1.8, z + 0.38); break;
       case 'coffin': L.add(0x4a3628, 1.0, 0.7, 1.8, x, 0.35, z); L.add(0x5b4636, 1.1, 0.12, 1.9, x, 0.76, z); L.add(0xc9a227, 0.14, 0.05, 0.9, x, 0.84, z); L.add(0xc9a227, 0.5, 0.05, 0.14, x, 0.84, z - 0.2); break;
-      case 'idol': L.add(0x7a6a4a, 1.2, 0.5, 1.2, x, 0.25, z); L.add(0x8a7a5a, 0.9, 1.6, 0.8, x, 1.3, z); E.add(0x3dff8a, 0.18, 0.14, 0.04, x - 0.2, 1.7, z + 0.41); E.add(0x3dff8a, 0.18, 0.14, 0.04, x + 0.2, 1.7, z + 0.41); L.add(0x2f7a2a, 1.0, 0.3, 0.9, x, 2.2, z); break;
-      case 'anvil': L.add(0x2a2a2e, 1.0, 0.6, 0.7, x, 0.3, z); L.add(0x3a3a40, 1.5, 0.35, 0.6, x, 0.78, z); E.add(0xff6a00, 0.5, 0.1, 0.3, x + 0.2, 0.98, z); break;
-      case 'crystal': E.add(0x7fe8ff, 0.6, 2.2, 0.6, x, 1.1, z, 0.4); E.add(0xbff6ff, 0.4, 1.4, 0.4, x + 0.4, 0.7, z + 0.2, -0.3); E.add(0x4fc8ff, 0.35, 1.1, 0.35, x - 0.4, 0.55, z - 0.1, 0.9); break;
-      case 'shroom': L.add(0xe8e0d0, 0.5, 1.8, 0.5, x, 0.9, z); E.add(0xd05aff, 1.8, 0.5, 1.8, x, 2.0, z); E.add(0xff9aff, 0.3, 0.1, 0.3, x + 0.4, 2.27, z + 0.3); E.add(0xff9aff, 0.3, 0.1, 0.3, x - 0.5, 2.27, z - 0.2); break;
+      case 'idol': glow(2, x, 1.7, z + 0.45, 1.1, 0.6, 0x3dff8a, 0.45, 0.06); L.add(0x7a6a4a, 1.2, 0.5, 1.2, x, 0.25, z); L.add(0x8a7a5a, 0.9, 1.6, 0.8, x, 1.3, z); E.add(0x3dff8a, 0.18, 0.14, 0.04, x - 0.2, 1.7, z + 0.41); E.add(0x3dff8a, 0.18, 0.14, 0.04, x + 0.2, 1.7, z + 0.41); L.add(0x2f7a2a, 1.0, 0.3, 0.9, x, 2.2, z); break;
+      case 'anvil': glow(0, x, 0.06, z, 3.2, 3.2, 0xff6a00, 0.3, 0.1); light(x, 1.6, z, 0xff7a1a, 1.1, 8); L.add(0x2a2a2e, 1.0, 0.6, 0.7, x, 0.3, z); L.add(0x3a3a40, 1.5, 0.35, 0.6, x, 0.78, z); E.add(0xff6a00, 0.5, 0.1, 0.3, x + 0.2, 0.98, z); break;
+      case 'crystal': glow(0, x, 0.06, z, 5.5, 5.5, 0x7fe8ff, 0.3, 0.02); glow(2, x, 1.3, z, 2.6, 2.6, 0x7fe8ff, 0.35, 0.03); light(x, 2.0, z, 0x7fe8ff, 1.3, 10); E.add(0x7fe8ff, 0.6, 2.2, 0.6, x, 1.1, z, 0.4); E.add(0xbff6ff, 0.4, 1.4, 0.4, x + 0.4, 0.7, z + 0.2, -0.3); E.add(0x4fc8ff, 0.35, 1.1, 0.35, x - 0.4, 0.55, z - 0.1, 0.9); break;
+      case 'shroom': glow(0, x, 0.06, z, 5.5, 5.5, 0xd05aff, 0.3, 0.04); glow(2, x, 2.0, z, 2.6, 1.6, 0xd05aff, 0.35, 0.04); light(x, 1.6, z, 0xd05aff, 1.3, 10); L.add(0xe8e0d0, 0.5, 1.8, 0.5, x, 0.9, z); E.add(0xd05aff, 1.8, 0.5, 1.8, x, 2.0, z); E.add(0xff9aff, 0.3, 0.1, 0.3, x + 0.4, 2.27, z + 0.3); E.add(0xff9aff, 0.3, 0.1, 0.3, x - 0.5, 2.27, z - 0.2); break;
       case 'cannon': L.add(0x6a4a2a, 1.2, 0.4, 1.0, x, 0.3, z); L.add(0x2a2a2e, 0.5, 0.5, 1.6, x, 0.75, z + 0.2); L.add(0x1a1a1e, 0.35, 0.35, 0.05, x, 0.75, z + 1.0); break;
       default: L.add(theme.top, 1, 2.5, 1, x, 1.25, z);
     }
@@ -635,6 +799,7 @@ function buildLevel(map, theme) {
         if (at(i, j) !== T_FLOOR) continue;
         const x = (i + 0.5) * TILE, z = (j + 0.5) * TILE;
         L.add(0x3a3a3a, 0.5, 1.0, 0.5, x, 0.5, z); E.add(0xff4a2a, 0.45, 0.25, 0.45, x, 1.1, z);
+        glow(0, x, 0.06, z, 4.5, 4.5, 0xff5a2a, 0.35, 0.12); glow(2, x, 1.35, z, 1.6, 1.6, 0xff6a3a, 0.7, 0.2); light(x, 1.9, z, 0xff6a2a, 1.4, 9);
       }
     } else if (r.kind === 'storage') {
       // sacks along the top wall
@@ -652,9 +817,9 @@ function buildLevel(map, theme) {
   const coneG = new THREE.ConeGeometry(0.22, 0.9, 4);
   spikeG.forEach((list, q) => {
     if (!list) return;
-    const plate = new THREE.InstancedMesh(BOXG, new THREE.MeshLambertMaterial({ color: 0x55555c }), list.length);
-    const spikes = new THREE.InstancedMesh(coneG, new THREE.MeshLambertMaterial({ color: trapStyle }), list.length * 4);
-    plate.frustumCulled = spikes.frustumCulled = false;
+    const plate = new THREE.InstancedMesh(BOXG, levelMat(new THREE.MeshLambertMaterial({ color: 0x55555c })), list.length);
+    const spikes = new THREE.InstancedMesh(coneG, levelMat(new THREE.MeshLambertMaterial({ color: trapStyle })), list.length * 4);
+    plate.frustumCulled = spikes.frustumCulled = false; plate.receiveShadow = true;
     list.forEach((t, n) => {
       const x = (t.i + 0.5) * TILE, z = (t.j + 0.5) * TILE;
       _m4.makeScale(1.8, 0.06, 1.8); _m4.setPosition(x, 0.03, z); plate.setMatrixAt(n, _m4);
@@ -666,8 +831,8 @@ function buildLevel(map, theme) {
   });
   ventG.forEach((list, q) => {
     if (!list) return;
-    const fire = new THREE.InstancedMesh(BOXG, new THREE.MeshBasicMaterial({ color: ventCol, transparent: true, opacity: 0.8, depthWrite: false }), list.length * 2);
-    const glowM = new THREE.MeshBasicMaterial({ color: 0x2a2a2a });
+    const fire = new THREE.InstancedMesh(BOXG, new THREE.MeshBasicMaterial({ color: ventCol, transparent: true, opacity: 0.8, depthWrite: false, toneMapped: false }), list.length * 2);
+    const glowM = new THREE.MeshBasicMaterial({ color: 0x2a2a2a, toneMapped: false });
     const grate = new THREE.InstancedMesh(BOXG, glowM, list.length);
     fire.frustumCulled = grate.frustumCulled = false;
     list.forEach((t, n) => {
@@ -692,18 +857,22 @@ function buildLevel(map, theme) {
   }
 
   L.build(grp, rng); E.build(grp, rng); A.build(grp, rng);
+  grp.userData.glow = buildGlows(grp, glows);
+  grp.userData.lights = lights;
+  grp.userData.amb = buildAmbient(grp, theme);
 
   // exit portal
   const portal = new THREE.Group();
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.28, 8, 24), new THREE.MeshBasicMaterial({ color: 0x555555 }));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.28, 8, 24), new THREE.MeshBasicMaterial({ color: 0x555555, toneMapped: false }));
   ring.position.y = 1.9;
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24), new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.0, side: THREE.DoubleSide }));
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24), new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.0, side: THREE.DoubleSide, toneMapped: false }));
   disc.position.y = 1.9;
-  const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.2, 20), new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
-  pad.position.y = 0.1;
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.2, 20), levelMat(new THREE.MeshLambertMaterial({ color: 0x8a8a8a })));
+  pad.position.y = 0.1; pad.receiveShadow = true;
   portal.add(ring, disc, pad);
+  const pglow = buildGlows(portal, [{ k: 0, x: 0, y: 0.25, z: 0, sx: 7, c: 0x00e5ff, i: 0.5, fl: 0.05, ph: 0 }, { k: 2, x: 0, y: 1.9, z: 0.2, sx: 5, c: 0x40f0ff, i: 0.45, fl: 0.05, ph: 1 }]);
   portal.position.set(map.exit.x, 0, map.exit.z);
-  portal.userData = { ring, disc };
+  portal.userData = { ring, disc, glow: pglow };
   grp.add(portal);
   grp.userData.portal = portal;
   grp.userData.anim = anim;
@@ -733,4 +902,5 @@ function animateLevel(level, t) {
   if (A.torches) A.torches.material.color.setHex(level.userData.themeLight).offsetHSL(0.01 * Math.sin(t * 9), 0, 0.06 * Math.sin(t * 13));
   for (const gem of A.shrine) { gem.rotation.y = t * 1.5; gem.position.y = 1.9 + 0.15 * Math.sin(t * 2); if (gem.userData.ring) gem.userData.ring.material.opacity = 0.35 + 0.25 * Math.sin(t * 3); }
   for (let n = 0; n < A.clouds.length; n++) { const c = A.clouds[n]; c.position.x += Math.sin(t * 0.3 + n) * 0.004; }
+  if (level.userData.glow) level.userData.glow.material.uniforms.uTime.value = t % 1000;
 }
