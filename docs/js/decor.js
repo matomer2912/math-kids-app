@@ -366,8 +366,8 @@ DPROP.flowers = (b, r, P) => {
 DPROP.overgrowth = (b, r, P) => {   // wall top: thick leafy mats, some hanging over the edge (+z)
   const n = 2 + Math.floor(r() * 2);
   for (let s = 0; s < n; s++) {
-    const w = 0.7 + r() * 0.9, h = 0.12 + r() * 0.22, x = (r() - 0.5) * 1.1, z = (r() - 0.5) * 1.1;
-    b.box(djit(dpick(s ? P.leaf : P.leafDark, r), r, 0.1), w, h, w * (0.7 + r() * 0.4), x, 0, z, { ry: (r() - 0.5) * 0.4, g: 0.25, sw: 0.015 });
+    const w = 0.6 + r() * 0.7, h = 0.2 + r() * 0.3, x = (r() - 0.5) * 1.1, z = (r() - 0.5) * 1.1;
+    b.box(djit(dpick(s === 1 ? P.leaf : P.leafDark, r), r, 0.1), w, h, w * (0.7 + r() * 0.4), x, 0, z, { ry: (r() - 0.5) * 0.4, g: 0.35, sw: 0.015 });
   }
   if (r() < 0.5) b.box(djit(dpick(P.leaf, r), r, 0.1), 0.9 + r() * 0.6, 0.35, 0.16, (r() - 0.5) * 0.6, -0.3, 0.95, { g: 0.3, sb: 0.03 });
 };
@@ -511,7 +511,7 @@ const DECOR_KITS = {
       stone: 0x6a6d78, stone2: 0x4c4f5a, stones: [0x5a5d68, 0x6e717c, 0x4a4d57], iron: 0x2c2e34, web: 0xc8ccd4,
       root: 0x3b3029, lichen: 0x4f6b62, crystal: 0x3ff0d8, crystal2: 0x9ffff0, slab: [0x5a5d68, 0x62656f, 0x50535d, 0x6a6c74],
     },
-    mist: { n: 34, c: 0x6fa0c8, i: 0.24, y: 0.3, s: [5, 9] },
+    mist: { n: 34, c: 0x7aa8d0, i: 0.32, y: 0.3, s: [5, 9] },
     shafts: { c: 0x8fb0ff, i: 0.3, per: 0.5, w: [1.8, 2.8] },
     wisps: { c: 0x6affd8, n: 0.5 },                    // rising soul wisps from chasms (per pit tile probability)
     rules: [
