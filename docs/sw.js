@@ -1,7 +1,7 @@
 // Offline cache: network-first (so updates arrive when online), cache fallback when offline.
-const CACHE = 'dd-v2';
+const CACHE = 'dd-v3';
 const FILES = ['./', 'index.html', 'manifest.json', 'icon.svg', 'net.js', 'lib/three.min.js', 'lib/qrcode.js', 'lib/jsQR.js',
-  'js/data.js', 'js/dungeon.js', 'js/models.js', 'js/sim.js', 'js/core.js', 'js/render.js', 'js/ui.js', 'js/main.js'];
+  'js/data.js', 'js/dungeon.js', 'js/models.js', 'js/sim.js', 'js/core.js', 'js/render.js', 'js/ui.js', 'js/main.js', 'fonts/lilita-one.woff2'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
