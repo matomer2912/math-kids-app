@@ -76,6 +76,8 @@ button { font:inherit; color:var(--ink); border:none; cursor:pointer; background
 
 /* ---------- HUD ---------- */
 #hud { position:fixed; inset:0; pointer-events:none; }
+/* subtle per-world vignette (tint set from JS via --vig); static layer, no repaints */
+#hud::before { content:''; position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse 75% 70% at 50% 46%,transparent 58%,var(--vig,rgba(0,0,0,.45)) 100%); }
 #joyzone { position:absolute; left:0; top:0; width:50%; height:100%; pointer-events:auto; }
 #joy { position:absolute; width:132px; height:132px; margin:-66px 0 0 -66px; border-radius:50%; pointer-events:none;
   background:radial-gradient(circle,rgba(0,0,0,.18) 0 55%,rgba(0,0,0,.35) 56% 100%);
@@ -156,7 +158,8 @@ button { font:inherit; color:var(--ink); border:none; cursor:pointer; background
 #bosspct { position:absolute; inset:0; font-family:var(--fd); font-size:13px; line-height:15px; color:#fff; text-shadow:var(--ol); }
 
 /* action buttons */
-#btns { position:absolute; right:calc(12px + var(--sar)); bottom:calc(10px + var(--sab)); width:250px; height:228px; pointer-events:none; }
+#btns { position:absolute; right:calc(12px + var(--sar)); bottom:calc(10px + var(--sab)); width:250px; height:228px; pointer-events:none;
+  transform:scale(.85); transform-origin:100% 100%; } /* 15% smaller cluster, anchored bottom-right (smallest button stays > 54px) */
 .abtn { --c1:#888; --c2:#333; --rc:rgba(255,227,154,.9);
   position:absolute; border-radius:50%; display:flex; align-items:center; justify-content:center; pointer-events:auto; overflow:visible;
   background:radial-gradient(circle at 50% 32%,var(--c1),var(--c2) 75%); opacity:.93;
@@ -421,6 +424,8 @@ input::placeholder { color:#8a7656; }
 .tog.on .sw2 { background:#14521f; }
 .tog.on .sw2::after { left:22px; background:#6cff84; box-shadow:0 0 8px #6cff84; }
 #pause .big.xl { font-size:30px; }
+#gfxBtn .tl b { font-weight:400; color:#ffe58a; }
+#gfxBtn .gfxhint { font-family:var(--fb); font-weight:800; font-size:11px; color:var(--mute); letter-spacing:0; }
 
 #share .pbody { display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:center; }
 
@@ -593,6 +598,7 @@ input::placeholder { color:#8a7656; }
       <button class="tog" id="lowBtn"><span class="ti">🔋</span><span class="tl">Battery<br>saver</span><span class="sw2"></span></button>
       <button class="tog" id="sndBtn"><span class="ti">🔊</span><span class="tl">Sound</span><span class="sw2"></span></button>
     </div>
+    <button class="tog" id="gfxBtn"><span class="ti">✨</span><span class="tl">Graphics<br><b>Auto</b></span><span class="gfxhint">tap to change</span></button>
     <button class="big gray sm" id="quitBtn">🚪 Quit to menu</button>
   </div>
 </div>
