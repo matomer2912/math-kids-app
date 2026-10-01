@@ -49,7 +49,7 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 140);
 // Camera: fixed orientation (pitch ~58°), only translates. CAM_OFF is the camera position relative to
 // the local hero; its z is recomputed in resize() so the hero sits near the middle of the visible ground
 // (with a perspective camera the ground below the look point is much shorter than above it).
-const CAM_H = 16.2, CAM_D = 10.1;                       // ~10% further than the old (14.5, 9.5)
+const CAM_H = 16.8, CAM_D = 10.5;                       // ~14% further than the old (14.5, 9.5)
 const CAM_OFF = new THREE.Vector3(0, CAM_H, CAM_D);
 camera.position.set(0, CAM_H, CAM_D); camera.lookAt(0, 0, 0);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.82); scene.add(hemi);
@@ -136,10 +136,11 @@ function resize() {
   // keep a similar horizontal view on narrow screens
   camera.fov = w / h < 1.3 ? 60 : 45;
   camera.updateProjectionMatrix();
-  // put the hero ~85% of the way to the middle of the visible ground strip (more view towards the bottom)
+  // put the hero ~75% of the way to the middle of the visible ground strip (more view towards the bottom:
+  // ~11 units above / ~9.7 below the hero at 45° fov, was 11.8 / 6.8)
   const p = Math.atan2(CAM_H, CAM_D), v = THREE.MathUtils.degToRad(camera.fov / 2);
   const far = CAM_H / Math.tan(Math.max(0.2, p - v)), near = CAM_H / Math.tan(Math.min(1.5, p + v));
-  CAM_OFF.z = CAM_D + 0.85 * ((far + near) / 2 - CAM_D);
+  CAM_OFF.z = CAM_D + 0.75 * ((far + near) / 2 - CAM_D);
   if (typeof onResizeGfx === 'function') onResizeGfx();
 }
 addEventListener('resize', resize); resize();
