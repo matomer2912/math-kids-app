@@ -852,5 +852,18 @@ input::placeholder { color:#8a7656; }
 <script src="js/shop.js"></script>
 <script src="js/social.js"></script>
 <script src="js/main.js"></script>
+<div id="pvbar" style="position:fixed;left:50%;top:8px;transform:translateX(-50%);z-index:999;display:flex;gap:8px;align-items:center;background:rgba(20,14,8,.92);border:2px solid #c9a23a;border-radius:14px;padding:6px 10px;font:800 14px system-ui;color:#ffe9b0">
+<span>✨ PREVIEW</span>
+<button id="pvCrypt" style="font:900 14px system-ui;padding:8px 12px;border-radius:10px;border:0;background:#3c6fd6;color:#fff">▶ Try Crypt</button>
+<button id="pvJungle" style="font:900 14px system-ui;padding:8px 12px;border-radius:10px;border:0;background:#2f9a46;color:#fff">▶ Try Jungle</button>
+</div>
+<script>
+(function(){
+  function go(f){ try{ audioInit(); }catch(e){} G.startFloor=f; startGame('solo'); document.getElementById('pvbar').style.display='none'; }
+  document.getElementById('pvCrypt').onclick=function(){ go(4); };
+  document.getElementById('pvJungle').onclick=function(){ go(7); };
+  var obs=setInterval(function(){ var bar=document.getElementById('pvbar'); if(!bar) return; bar.style.display = (typeof G!=='undefined' && G.inGame) ? 'none' : 'flex'; }, 500);
+})();
+</script>
 </body>
 </html>
