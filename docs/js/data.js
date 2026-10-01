@@ -143,10 +143,10 @@ const THEMES = [
     pit: { c: 0x4a3018, c2: 0x7a5428, glow: 0 }, slow: { c: 0xb8904c, name: 'Quicksand' }, pattern: 'cracks', walls: 'brick', traps: ['spike', 'plate'],
     light: 0xffa31a, carpet: 0x2f6fd6, carpet2: 0xffc72c, slime: 0xe0c060, guard: [0x1a1a1a, 0xffc72c], mage: [0x2457c5, 0xffc72c], totem: 0xc9a25e, charger: 0x2a6a8a,
     // golden hour: low warm sun from the west (long shadows), peach sky fill, amber haze, torch-lit tomb halls
-    gfx: { exp: 0.96, gl: 1.2, hemi: 0.5, sky: 0xffcf9a, gnd: 0x4a2a14, sun: [0xffb46a, 1.6], sunDir: [-17, 12, 5], fog: [24, 52], fogc: 0x9a5a2e, bg: 0x2a1408,
-      mist: [0.32, -2.2, 0.8, 0xd89a5a], dapple: 0.22, dappleScale: 0.03, amb: 'dust', ambC: 0xffd08a, vig: 'rgba(64,22,0,.5)', rim: [0xffd6a0, 0.5, 0.08], hero: 0xffd8a8, heroPool: 0.26 },
+    gfx: { exp: 0.94, gl: 1.2, hemi: 0.56, sky: 0xa8b0d4, gnd: 0x6a4428, sun: [0xffc282, 1.62], sunDir: [-17, 12, 5], fog: [24, 54], fogc: 0xb07a4c, bg: 0x2e1a0c,
+      mist: [0.26, -2.2, 0.8, 0xe8b27a], dapple: 0.22, dappleScale: 0.03, amb: 'dust', ambC: 0xffd08a, vig: 'rgba(64,22,0,.5)', rim: [0xffd6a0, 0.5, 0.08], hero: 0xffd8a8, heroPool: 0.26 },
     look: { floor: ['sandstone', 'slab', 'temple', 'slabCrack', 'sandstone'], corr: ['sand', 'cobble', 'sand'], patch: 'sand', patchP: 0.3, wall: 'sandstone', wallAlt: 'templeWall', altP: 0.45,
-      top: 'sandTop', rubbleT: 'rubble', rubbleC: 0xd2aa70, cliff: 'sandstone', topVar: 0.4, rubble: 0.24, lip: 0xe6c48a, lipT: 'sand', lipP: 0.4, ao: 0.72, aoR: 0.46, side: 0.84, base: 0.58, bright: 0.98 },
+      top: 'sandTop', rubbleT: 'rubble', rubbleC: 0xd2aa70, cliff: 'sandstone', topVar: 0.4, rubble: 0.24, lip: 0xe6c48a, lipT: 'sand', lipP: 0.4, ao: 0.74, aoR: 0.46, side: 0.84, base: 0.56, bright: 0.9 },
     boss: { name: 'The Sand Pharaoh', kind: 'pharaoh', body: 0xe0b44a, accent: 0x2457c5, skin: 0x9a6b3a, eye: 0x3dffd0, sig: ['spiral', 'spiral', 'raise'] },
   },
   {
@@ -182,8 +182,8 @@ const THEMES = [
     pit: { c: 0xff4a00, c2: 0xffa000, glow: 1 }, slow: { c: 0x2a2220, name: 'Ash' }, pattern: 'basalt', walls: 'basalt', traps: ['vent', 'spike'],
     light: 0xff7a1a, carpet: 0x5a1a10, carpet2: 0xff7a1a, slime: 0xff5a1a, guard: [0x3a3a40, 0xff6a00], mage: [0x6a1a10, 0xffb000], totem: 0x2a2020, charger: 0x6a2a1a,
     // dark & moody: black basalt, the light comes from below (magma, cracks, forges), smoke haze, rising embers
-    gfx: { exp: 1.0, gl: 1.6, hemi: 0.3, sky: 0x8a6a64, gnd: 0x2a0c04, sun: [0xff9a62, 0.62], sunDir: [-12, 20, 3], fog: [20, 46], fogc: 0x1c0a06, bg: 0x0a0302,
-      mist: [0.42, -1.6, 0.85, 0x3a1a12], amb: 'ember', ambC: 0xff8a2a, vig: 'rgba(30,4,0,.6)', rim: [0xffa060, 0.7, 0.12], hero: 0xffc890, heroPool: 0.34 },
+    gfx: { exp: 1.12, gl: 1.6, hemi: 0.5, sky: 0x8c8a96, gnd: 0x2a1610, sun: [0xffb486, 0.78], sunDir: [-12, 20, 3], fog: [21, 47], fogc: 0x221010, bg: 0x0c0405,
+      mist: [0.3, -1.6, 0.85, 0x4e3a36], amb: 'ember', ambC: 0xff8a2a, vig: 'rgba(30,4,0,.6)', rim: [0xffa060, 0.7, 0.12], hero: 0xffc890, heroPool: 0.34 },
     look: { floor: ['basalt', 'basalt', 'cobble', 'slabCrack'], corr: ['basalt', 'rubble', 'cobble'], patch: 'rubble', patchP: 0.22, wall: 'rock', wallAlt: 'basalt', altP: 0.4, top: 'rubble',
       rubbleT: 'basalt', rubbleC: 0x3a2c28, cliff: 'basalt', topVar: 0.45, rubble: 0.3, ao: 0.8, aoR: 0.5, side: 0.8, base: 0.5, bright: 0.92 },
     boss: { name: 'The Magma Titan', kind: 'titan', body: 0x2e2421, accent: 0xff5a00, skin: 0x2e2421, eye: 0xffd000, sig: ['meteors', 'shock', 'shock'] },
@@ -195,9 +195,9 @@ const THEMES = [
     pit: { c: 0x0e3a66, c2: 0x2a6aa0, glow: 0 }, slow: { c: 0xf4fbff, name: 'Deep Snow' }, pattern: 'ice', walls: 'crystal', traps: ['spike', 'vent'],
     light: 0x7fe8ff, carpet: 0x2a5a9a, carpet2: 0xdff3ff, slime: 0x8fe8ff, guard: [0x5a8ab0, 0xdff3ff], mage: [0x2a6ab0, 0xffffff], totem: 0x9fe6ff, charger: 0x7a6a5a,
     // moonlit night: cold blue moonlight from the back-left, deep blue shadows, glowing cyan crystals, cold mist, snow
-    gfx: { exp: 0.92, gl: 1.5, hemi: 0.3, sky: 0x7898d0, gnd: 0x0a1426, sun: [0xa8c4ff, 0.8], sunDir: [-11, 20, -6], dapple: 0.3, dappleScale: 0.026, fog: [22, 48], fogc: 0x0e1c34, bg: 0x050b18,
+    gfx: { exp: 0.92, gl: 1.5, hemi: 0.25, sky: 0x7898d0, gnd: 0x0a1426, sun: [0xa8c4ff, 0.95], sunDir: [-11, 20, -6], dapple: 0.3, dappleScale: 0.026, fog: [22, 48], fogc: 0x0e1c34, bg: 0x050b18,
       mist: [0.46, -2.2, 0.9, 0x7a9ccc], amb: 'snow', ambC: 0xe0f0ff, vig: 'rgba(0,8,30,.6)', rim: [0x9ad8ff, 0.62, 0.1], hero: 0xffe2c0, heroPool: 0.32 },
-    look: { floor: ['ice', 'slab', 'ice', 'slabCrack'], corr: ['ice', 'cobble', 'ice'], patch: 'sand', patchP: 0.32, wall: 'iceWall', wallAlt: 'rock', altP: 0.3, top: 'sandTop',
+    look: { floor: ['ice', 'ice', 'slab', 'ice', 'slabCrack'], corr: ['ice', 'cobble', 'ice'], patch: 'sand', patchP: 0.36, wall: 'iceWall', wallAlt: 'rock', altP: 0.3, top: 'sandTop',
       rubbleT: 'ice', rubbleC: 0xcfe6ff, cliff: 'iceWall', topVar: 0.4, rubble: 0.24, lip: 0xeef6ff, lipT: 'sand', lipP: 0.5, ao: 0.72, aoR: 0.46, side: 0.8, base: 0.55, bright: 0.8 },
     boss: { name: 'The Frost Giant', kind: 'giant', body: 0x8fc4e8, accent: 0xffffff, skin: 0x8fc4e8, eye: 0x00e5ff, sig: ['icicles', 'icicles', 'avalanche'] },
   },

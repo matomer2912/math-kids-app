@@ -30,12 +30,13 @@ function dkaFaceBusy(b) {
 function dkaTaper(b, c, w0, w1, h, n, x, y, z, o) {
   for (let s = 0; s < n; s++) { const t = s / n, w = w0 + (w1 - w0) * t; b.box(typeof c === 'function' ? c(s) : c, w, h / n, w * (o && o.d ? o.d : 1), x, y + h * t, z, o); }
 }
-// soft mound of 2-4 flattened boxes, each a little higher than the last (never coplanar tops)
+// stepped voxel mound (sand / snow / ash): layers shrinking upward and leaning back toward the wall (-z)
 function dkaMound(b, r, cols, w, h, x, y, z, n) {
   n = n || 3;
+  const ry = (r() - 0.5) * 0.5, d = 0.55 + r() * 0.25, hh = h / n;
   for (let s = 0; s < n; s++) {
-    const k = 1 - s / (n + 0.6), ww = w * k * (0.85 + r() * 0.3);
-    b.box(djit(cols[s % cols.length], r, 0.05), ww, h * (0.45 + 0.55 * k) + s * 0.03, ww * (0.6 + r() * 0.3), x + (r() - 0.5) * w * 0.25, y, z + (r() - 0.5) * w * 0.15, { ry: (r() - 0.5) * 0.6, g: 0.25 });
+    const ww = w * (1 - s / n * 0.72);
+    b.box(djit(cols[s % cols.length], r, 0.04), ww, hh + 0.02, ww * d, x + (r() - 0.5) * w * 0.1, y + s * hh, z - s * w * 0.06, { ry, g: s ? 0.12 : 0.3 });
   }
 }
 
@@ -207,6 +208,13 @@ Object.assign(DPROP, {
     b.box(P.gold, 0.06, 0.06, 0.06, 0.05, 0.22, 0.02, { e: 1 });
     b.glow(0, 0, 0.04, 0, 1.8, 1.8, P.gold, 0.2, 0.05);
   },
+  columnDressD(b, r, P) {  // dungeon.js column (0.9 shaft, 1.3 base / capital): gold + lapis bands, glyph strip, sand at the foot
+    b.box(P.gold, 0.97, 0.1, 0.97, 0, 2.28, 0, { g: 0 });
+    b.box(P.lapis, 0.95, 0.16, 0.95, 0, 2.1, 0, { g: 0 });
+    b.box(P.gold2, 0.96, 0.08, 0.96, 0, 0.62, 0, { g: 0 });
+    for (let s = 0; s < 4; s++) b.box(s === 2 ? P.lapis : P.glyph, 0.12 + r() * 0.1, 0.12, 0.03, (r() - 0.5) * 0.3, 0.85 + s * 0.3, 0.465, { g: 0 });
+    dkaMound(b, r, P.sandCols, 1.4, 0.36, 0.2, 0, 0.75, 3);
+  },
   bonesD(b, r, P) { DPROP.bones(b, r, P); if (r() < 0.4) b.box(P.sand, 0.9, 0.06, 0.6, (r() - 0.5) * 0.4, 0, (r() - 0.5) * 0.3, { ry: r() * 3, g: 0 }); },
   urnRing(b, r, P) {     // around obelisks / floor props: sand, an urn or two, a reed tuft
     for (let s = 0; s < 3; s++) { const a = r() * 6.283, d = 0.85; b.push(Math.cos(a) * d, 0, Math.sin(a) * d, r() * 3, 0.7); (s === 0 ? DPROP.urns : s === 1 ? DPROP.sandDrift : DPROP.rubble)(b, r, P); b.pop(); }
@@ -279,7 +287,10 @@ Object.assign(DPROP, {
       const w = 0.24 + r() * 0.4, x = (r() - 0.5) * 1.1, z = (r() - 0.5) * 0.6;
       b.box(djit(dpick(P.stones, r), r, 0.1), w, w * (0.5 + r() * 0.5), w * (0.7 + r() * 0.5), x, 0, z, { ry: r() * 3, g: 0.35 });
     }
-    if (r() < 0.7) { b.box(P.magma, 0.5, 0.025, 0.06, (r() - 0.5) * 0.4, 0, (r() - 0.5) * 0.3, { ry: r() * 3, e: 1 }); b.glow(0, 0, 0.04, 0, 1.8, 1.8, P.magma, 0.24, 0.06); }
+    if (r() < 0.85) {   // still-molten seams between the chunks
+      for (let s = 0; s < 2; s++) b.box(s ? P.magma2 : P.magma, 0.4 + r() * 0.3, 0.03, 0.06, (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.35, { ry: r() * 3, e: 1 });
+      b.glow(0, 0, 0.04, 0, 2.2, 2.0, P.magma, 0.3, 0.06);
+    }
   },
   ashPile(b, r, P) { dkaMound(b, r, P.ashCols, 0.9 + r() * 0.5, 0.22 + r() * 0.14, 0, 0, 0, 3); if (r() < 0.5) b.box(P.hot, 0.08, 0.04, 0.08, (r() - 0.5) * 0.3, 0.1, (r() - 0.5) * 0.2, { e: 1 }); },
   crust(b, r, P) {       // dark crust plates floating on the magma
@@ -329,6 +340,13 @@ Object.assign(DPROP, {
     }
     b.box(P.iron, 2.0, 0.07, 0.07, 0, 0.22, 0, { g: 0 });
   },
+  columnDressL(b, r, P) {  // dungeon.js column: magma veins up the shaft, a chain wrap, ash at the foot
+    for (let s = 0; s < 3; s++) b.box(s & 1 ? P.magma2 : P.magma, 0.06, 0.5 + r() * 0.3, 0.03, -0.15 + s * 0.14, 0.4 + s * 0.6, 0.465, { rz: (r() - 0.5) * 0.8, e: 1 });
+    b.box(P.iron, 0.96, 0.1, 0.96, 0, 1.7, 0, { g: 0 });
+    b.glow(1, 0, 1.1, 0.5, 1.4, 2.2, P.magma, 0.28, 0.06);
+    dkaMound(b, r, P.ashCols, 1.2, 0.26, -0.3, 0, 0.75, 2);
+    DPROP.coolRubble(b, r, P);
+  },
   emberRing(b, r, P) { for (let s = 0; s < 3; s++) { const a = r() * 6.283; b.push(Math.cos(a) * 0.8, 0, Math.sin(a) * 0.8, r() * 3, 0.75); (s ? DPROP.coolRubble : DPROP.ashPile)(b, r, P); b.pop(); } },
 });
 
@@ -362,8 +380,8 @@ Object.assign(DPROP, {
     }
     if (r() < 0.4) { b.box(P.crystal2, 0.06, 0.12, 0.06, (r() - 0.5) * 1.2, -0.5, 0.17, { e: 1 }); }
   },
-  snowDrift(b, r, P) { dkaMound(b, r, P.snowCols, 1.2 + r() * 0.6, 0.3 + r() * 0.2, 0, 0, 0.05, 3); if (r() < 0.3) b.box(P.ice, 0.3, 0.3, 0.3, (r() - 0.5) * 0.8, 0, (r() - 0.5) * 0.4, { ry: r() * 3, rz: 0.3, g: 0.2 }); },
-  snowTop(b, r, P) { dkaMound(b, r, P.snowCols, 1.1 + r() * 0.7, 0.16 + r() * 0.14, (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.6, 2 + Math.floor(r() * 2)); },
+  snowDrift(b, r, P) { dkaMound(b, r, P.snowCols, 1.2 + r() * 0.6, 0.42 + r() * 0.24, 0, 0, 0.05, 2); if (r() < 0.3) b.box(P.ice, 0.3, 0.3, 0.3, (r() - 0.5) * 0.8, 0, (r() - 0.5) * 0.4, { ry: r() * 3, rz: 0.3, g: 0.2 }); },
+  snowTop(b, r, P) { dkaMound(b, r, P.snowCols, 1.1 + r() * 0.7, 0.24 + r() * 0.16, (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.6, 2); },
   frozenPillar(b, r, P) {    // broken stone column sheathed in ice, snow on top
     const st = djit(P.stone, r, 0.06), h = 1.3 + r() * 1.2;
     b.box(shade(st, 0.85), 1.0, 0.25, 1.0, 0, 0, 0, { g: 0.3 });
@@ -403,6 +421,13 @@ Object.assign(DPROP, {
   iceFloe(b, r, P) {     // flat ice plates drifting on the dark water
     const n = 2 + Math.floor(r() * 3);
     for (let s = 0; s < n; s++) { const w = 0.4 + r() * 0.7; b.box(djit(r() < 0.5 ? P.snow : P.ice, r, 0.05), w, 0.08 + s * 0.02, w * (0.6 + r() * 0.4), (r() - 0.5) * 1.4, -0.02, (r() - 0.5) * 1.4, { ry: r() * 3, g: 0.1 }); }
+  },
+  columnDressI(b, r, P) {  // dungeon.js column: ice sheath, snow on the capital, icicles, a drift at the foot
+    b.box(P.ice, 1.0, 1.1, 1.0, 0, 0.3, 0, { g: 0.15 });
+    b.box(P.ice2, 1.06, 0.3, 1.06, 0, 0.3, 0, { ry: 0.15, g: 0.1 });
+    b.box(P.snow, 1.36, 0.14, 1.36, 0, 2.95, 0, { g: 0 });
+    for (let s = 0; s < 4; s++) b.box(P.ice, 0.09, 0.25 + r() * 0.3, 0.09, -0.5 + s * 0.33, 2.65 - 0.3, 0.6, { g: 0 });
+    dkaMound(b, r, P.snowCols, 1.4, 0.4, 0.2, 0, 0.75, 3);
   },
   frozenBones(b, r, P) { DPROP.bones(b, r, P); b.box(P.snow, 0.8, 0.05, 0.5, (r() - 0.5) * 0.3, 0, (r() - 0.5) * 0.3, { ry: r() * 3, g: 0 }); },
   snowRing(b, r, P) { for (let s = 0; s < 3; s++) { const a = r() * 6.283; b.push(Math.cos(a) * 0.85, 0, Math.sin(a) * 0.85, r() * 3, 0.7); (s === 0 && r() < 0.6 ? DPROP.iceCrystals : DPROP.snowDrift)(b, r, P); b.pop(); } },
@@ -458,7 +483,7 @@ Object.assign(DECOR_KITS, {
       { p: 'reeds', at: 'pitEdge', d: 0.3, in: 0.35 },
       { p: 'sandPile', at: 'pitEdge', d: 0.2, in: 0.3, s: [0.6, 0.8] },
     ],
-    solids: { obelisk: 'urnRing', column: 'urnRing' },
+    solids: { obelisk: 'urnRing', column: 'columnDressD' },
     overlay: 'urnRing',
   },
   lava: {
@@ -478,7 +503,9 @@ Object.assign(DECOR_KITS, {
       { p: 'forgeBrazier', at: 'cornerN', d: 0.45, sp: 5, h: 2.4, in: 0.5, solo: 1 },
       { p: 'anvilF', at: 'cornerN', d: 0.3, sp: 5, h: 1.3, in: 0.6, solo: 1 },
       { p: 'crucible', at: 'cornerN', d: 0.25, sp: 6, h: 1.0, in: 0.55, solo: 1 },
-      { p: 'forgeBrazier', at: 'edgeN', d: 0.03, sp: 6, h: 2.4, in: 0.45, solo: 1 },
+      { p: 'forgeBrazier', at: 'edgeN', d: 0.035, sp: 6, h: 2.4, in: 0.45, solo: 1 },
+      { p: 'forgeBrazier', at: 'edgeE', d: 0.02, sp: 7, h: 2.4, in: 0.45, solo: 1, s: [0.8, 0.9] },
+      { p: 'forgeBrazier', at: 'edgeW', d: 0.02, sp: 7, h: 2.4, in: 0.45, solo: 1, s: [0.8, 0.9] },
       { p: 'weaponRack', at: 'edgeN', d: 0.06, sp: 5, in: 0.25, solo: 1 },
       { p: 'coolRubble', at: 'cornerN', d: 0.5, in: 0.35 },
       { p: 'coolRubble', at: 'cornerS', d: 0.35, in: 0.3, s: [0.7, 0.9] },
@@ -494,12 +521,12 @@ Object.assign(DECOR_KITS, {
       { p: 'coolRubble', at: 'pitEdge', d: 0.25, in: 0.35, s: [0.7, 0.9] },
       { p: 'crust', at: 'pit', d: 0.35 },
     ],
-    solids: { anvil: 'emberRing', column: 'emberRing' },
+    solids: { anvil: 'emberRing', column: 'columnDressL' },
     overlay: 'emberRing',
   },
   ice: {
     pal: {
-      snow: 0xf0f6ff, snowCols: [0xf0f6ff, 0xe2ecf8, 0xd4e2f2], ice: 0xa8d4f0, ice2: 0x84bce6, stone: 0x5a6a80, stone2: 0x3e4a5c,
+      snow: 0xeaf2fc, snowCols: [0xdce8f6, 0xeaf2fc, 0xd0dff0], ice: 0xa8d4f0, ice2: 0x84bce6, stone: 0x5a6a80, stone2: 0x3e4a5c,
       stones: [0x5a6a80, 0x6a7a90, 0x4a586c], crystal: 0x4ff0ff, crystal2: 0xb8ffff, crystal3: 0x3a9cff,
       pine: [0x1c3a36, 0x22443c, 0x183230], bark: 0x3a2a24, bone: 0xe2ecf4, bone2: 0xb8c6d4,
       iron: 0x2a3038, ember: 0xff8a2a, fire: 0xffa63a, fire2: 0xfff0b0, moss: 0xe8f0fa,
@@ -533,7 +560,7 @@ Object.assign(DECOR_KITS, {
       { p: 'snowDrift', at: 'pitEdge', d: 0.25, in: 0.3, s: [0.6, 0.8] },
       { p: 'iceFloe', at: 'pit', d: 0.35 },
     ],
-    solids: { crystal: 'snowRing', column: 'snowRing' },
+    solids: { crystal: 'snowRing', column: 'columnDressI' },
     overlay: 'snowRing',
   },
 });
