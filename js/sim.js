@@ -39,7 +39,7 @@ const Sim = (() => {
     if (st.lvl) { const old = p.maxHp; p.lvl = st.lvl; p.maxHp = maxHpFor(p.lvl); if (p.maxHp > old) p.hp += p.maxHp - old; }
     if (st.wpn) p.wpn = st.wpn;
     if (st.name) p.name = st.name;
-    if (st.color) p.color = st.color;
+    if (st.color && ![...S.players.values()].some(o => o !== p && o.color === st.color)) p.color = st.color;
   }
   function setInput(id, m) {
     const p = S.players.get(id); if (!p) return;

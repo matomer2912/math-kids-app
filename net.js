@@ -1,6 +1,7 @@
 /* net.js - offline LAN co-op networking for the dungeon game.
  *
- * WebRTC DataChannels over a phone hotspot (no internet, no STUN).
+ * WebRTC DataChannels. Works over a shared phone hotspot (direct LAN, no internet needed)
+ * and over separate mobile-data connections (via public STUN/TURN servers when online).
  * Signaling is done by hand with QR codes: host shows offer QR -> guest scans,
  * guest shows answer QR -> host scans.  The QR payload is a compact string,
  * not raw SDP; each side rebuilds a minimal data-channel-only SDP.
@@ -12,7 +13,16 @@
   'use strict';
 
   var MAX_GUESTS = 3;            // host + 3 guests = 4 players
-  var ICE_WAIT_MS = 2500;        // non-trickle ICE gathering timeout
+  var ICE_WAIT_MS = 2500;        // non-trickle ICE gathering timeout (offline)
+  var ICE_WAIT_ONLINE_MS = 4000; // when online, give STUN/TURN time to answer
+  // Public helper servers so phones on different mobile networks can find each other.
+  // Unreachable servers (e.g. no signal in the desert) are simply skipped after the timeout.
+  var ICE_SERVERS = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: ['turn:freestun.net:3478'], username: 'free', credential: 'free' }
+  ];
+  function isOnline() { return typeof navigator === 'undefined' || navigator.onLine !== false; }
   var CONNECT_TIMEOUT_MS = 15000; // host: after scanning the answer
   var GUEST_WAIT_MS = 180000;    // guest: waiting for host to scan its code
   var DISCONNECT_GRACE_MS = 4000;
@@ -102,12 +112,21 @@
     return out;
   }
 
+  function isGlobalV6(ip) { return ip.indexOf(':') >= 0 && !/^(fe80|fc|fd|::1)/i.test(ip); }
   function pickCands(cands) {
     var list = cands.filter(function (c) { return TYPE_CH[c.type]; });
     list.sort(function (a, b) { return addrRank(a.addr) - addrRank(b.addr); });
-    var good = list.filter(function (c) { return addrRank(c.addr) < 3; });
-    if (!good.length) good = list; // keep whatever there is (loopback / IPv6)
-    return good.slice(0, 4);
+    // LAN / hotspot addresses first (direct, fastest)
+    var host = list.filter(function (c) { return c.type === 'host' && addrRank(c.addr) < 3; }).slice(0, 2);
+    // a global IPv6 address can connect two phones on mobile data directly
+    var v6 = list.filter(function (c) { return c.type === 'host' && isGlobalV6(c.addr); }).slice(0, 1);
+    // public address seen by STUN (works through many home/mobile routers)
+    var srflx = list.filter(function (c) { return c.type === 'srflx' || c.type === 'prflx'; }).slice(0, 1);
+    // relayed address from TURN (works almost everywhere, a bit slower)
+    var relay = list.filter(function (c) { return c.type === 'relay' && !/:/.test(c.addr); }).slice(0, 2);
+    var out = host.concat(v6, srflx, relay);
+    if (!out.length) out = list.slice(0, 4); // keep whatever there is (loopback etc.)
+    return out;
   }
 
   function encodeSignal(kind, id, sdp) {
@@ -151,7 +170,7 @@
     ];
     sig.cands.forEach(function (c, i) {
       var prio = TYPE_PREF[c.type] * 16777216 + (65535 - i) * 256 + 255;
-      L.push('a=candidate:' + (i + 1) + ' 1 udp ' + prio + ' ' + c.addr + ' ' + c.port + ' typ ' + c.type + ' generation 0');
+      L.push('a=candidate:' + (i + 1) + ' 1 udp ' + prio + ' ' + c.addr + ' ' + c.port + ' typ ' + c.type + (c.type === 'host' ? '' : ' raddr 0.0.0.0 rport 0') + ' generation 0');
     });
     L.push(
       'a=ice-ufrag:' + sig.ufrag,
@@ -170,7 +189,7 @@
   // Peers
   // ------------------------------------------------------------------
   function makePeer(id) {
-    var pc = new RTCPeerConnection({ iceServers: [] });
+    var pc = new RTCPeerConnection({ iceServers: isOnline() ? ICE_SERVERS : [] });
     var r = pc.createDataChannel('r', { negotiated: true, id: 0, ordered: true });
     var u = pc.createDataChannel('u', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
     var peer = { id: id, pc: pc, r: r, u: u, joined: false, left: false, dcTimer: null };
@@ -249,7 +268,7 @@
       pc.addEventListener('icegatheringstatechange', function () {
         if (pc.iceGatheringState === 'complete') finish();
       });
-      setTimeout(finish, ICE_WAIT_MS);
+      setTimeout(finish, isOnline() ? ICE_WAIT_ONLINE_MS : ICE_WAIT_MS);
     });
   }
 
@@ -519,7 +538,7 @@
     var sig = decodeSignal(payload);
     if (!sig || !sig.cands.length) return 'Network: none found (is Wi-Fi / hotspot on?)';
     return 'Network: ' + sig.cands.map(function (c) {
-      return /\.local$/.test(c.addr) ? 'hidden' : c.addr;
+      return (/\.local$/.test(c.addr) ? 'hidden' : c.addr) + (c.type === 'relay' ? ' (relay)' : c.type === 'srflx' ? ' (public)' : '');
     }).join(', ') + (camError ? ' · no camera' : '');
   }
   function buzz() { try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {} }
@@ -584,7 +603,7 @@
       step: 'Step 1 of 2 — ' + playerName(p.id) + ' scans this code',
       title: playerName(p.id) + ': scan this code',
       msg: 'On their phone: tap "Join game" and point the camera here.',
-      hint: 'Everyone must be on your phone\'s hotspot Wi-Fi',
+      hint: 'Best: everyone on your hotspot Wi-Fi. Mobile data works too.',
       media: 'qr', qr: payload, small: netInfo(payload),
       buttons: [
         { label: 'Next: scan their code', cls: 'net-go', fn: function () { hostScanStep(p); } },
@@ -635,7 +654,7 @@
     });
     p.timer = setTimeout(function () {
       if (pairing === p && p.peer === peer && !peer.joined) {
-        hostError(p, 'Couldn\'t connect — are both phones on the same hotspot Wi-Fi?');
+        hostError(p, 'Couldn\'t connect. Try putting both phones on your hotspot Wi-Fi, then Retry.');
       }
     }, CONNECT_TIMEOUT_MS);
     return true;
@@ -729,7 +748,7 @@
             buttons: [{ label: 'Start over', fn: function () { guestScanStep(p); } }, cancelButton(p)]
           });
           p.timer = setTimeout(function () {
-            if (pairing === p && p.peer === peer && !peer.joined) guestError(p, 'Couldn\'t connect — are both phones on the same hotspot Wi-Fi?');
+            if (pairing === p && p.peer === peer && !peer.joined) guestError(p, 'Couldn\'t connect. Try putting both phones on your hotspot Wi-Fi, then Retry.');
           }, GUEST_WAIT_MS);
         });
     }).catch(function (err) {
