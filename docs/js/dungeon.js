@@ -877,6 +877,7 @@ function buildLevel(map, theme) {
   grp.userData.portal = portal;
   grp.userData.anim = anim;
   grp.userData.themeLight = theme.light;
+  if (typeof buildDecor === 'function') buildDecor(map, theme, grp); // set dressing kits (decor.js)
   return grp;
 }
 
@@ -903,4 +904,5 @@ function animateLevel(level, t) {
   for (const gem of A.shrine) { gem.rotation.y = t * 1.5; gem.position.y = 1.9 + 0.15 * Math.sin(t * 2); if (gem.userData.ring) gem.userData.ring.material.opacity = 0.35 + 0.25 * Math.sin(t * 3); }
   for (let n = 0; n < A.clouds.length; n++) { const c = A.clouds[n]; c.position.x += Math.sin(t * 0.3 + n) * 0.004; }
   if (level.userData.glow) level.userData.glow.material.uniforms.uTime.value = t % 1000;
+  if (typeof animateDecor === 'function') animateDecor(level, t);
 }
