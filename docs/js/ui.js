@@ -291,14 +291,16 @@ function renderCmp() {
   const A = sel, B = other;
   const pa = itemPower(A), pb = itemPower(B), d = pa - pb;
   const kA = isEq ? 'EQUIPPED' : 'SELECTED', kB = isEq ? 'AFTER UPGRADE' : 'EQUIPPED';
+  const nA = isEq ? undefined : 1;   // upgrade preview: keep the current weapon's column neutral
+  const vsA = v => nA === undefined ? undefined : v;
   const powCell = (p, vs, show) => `<div class="cval cpow${vs === undefined ? '' : p > vs ? ' better' : p < vs ? ' worse' : ''}"><b><small>⚡</small>${p}</b>${show ? `<span class="delta ${deltaCls(show)}">${deltaTxt(show)}</span>` : ''}</div>`;
   const WA = WEAPONS[A.w], WB = WEAPONS[B.w];
   $('cmp').innerHTML = `<div class="cgrid">
     <span></span>${cmpHead(A, kA)}${cmpHead(B, kB)}
-    <span class="clab">Power</span>${powCell(pa, pb, isEq ? 0 : d)}${powCell(pb, pa, isEq ? pb - pa : 0)}
-    <span class="clab">Damage</span>${cmpCell(itemDmg(A), itemDmg(B), mD, Math.round(itemDmg(A)))}${cmpCell(itemDmg(B), itemDmg(A), mD, Math.round(itemDmg(B)))}
-    <span class="clab">Speed</span>${cmpCell(itemSpeed(A), itemSpeed(B), mS, itemSpeed(A).toFixed(1) + '/s')}${cmpCell(itemSpeed(B), itemSpeed(A), mS, itemSpeed(B).toFixed(1) + '/s')}
-    <span class="clab">Special</span>${cmpCell(itemSpecial(A), itemSpecial(B), mP, WA.sicon + ' ' + itemSpecial(A))}${cmpCell(itemSpecial(B), itemSpecial(A), mP, WB.sicon + ' ' + itemSpecial(B))}
+    <span class="clab">Power</span>${powCell(pa, vsA(pb), isEq ? 0 : d)}${powCell(pb, pa, isEq ? pb - pa : 0)}
+    <span class="clab">Damage</span>${cmpCell(itemDmg(A), vsA(itemDmg(B)), mD, Math.round(itemDmg(A)))}${cmpCell(itemDmg(B), itemDmg(A), mD, Math.round(itemDmg(B)))}
+    <span class="clab">Speed</span>${cmpCell(itemSpeed(A), vsA(itemSpeed(B)), mS, itemSpeed(A).toFixed(1) + '/s')}${cmpCell(itemSpeed(B), itemSpeed(A), mS, itemSpeed(B).toFixed(1) + '/s')}
+    <span class="clab">Special</span>${cmpCell(itemSpecial(A), vsA(itemSpecial(B)), mP, WA.sicon + ' ' + itemSpecial(A))}${cmpCell(itemSpecial(B), itemSpecial(A), mP, WB.sicon + ' ' + itemSpecial(B))}
     <span class="clab top">Magic</span><div class="top">${enchChips(A)}</div><div class="top">${enchChips(B)}</div>
   </div>`;
   // actions
