@@ -34,11 +34,11 @@ const LOOK_DEF = {
 // light-touch defaults for worlds that don't have their own look yet (keyed by theme.pattern)
 const LOOK_BY_PATTERN = {
   cracks: { floor: ['sandstone', 'sandstone', 'slabCrack'], corr: ['sand'], wall: 'brick', top: 'sandTop', cliff: 'sandstone' },
-  slabs: {}, moss: { floor: ['mossFloor', 'slab'], corr: ['dirt'], wall: 'rock', top: 'rubble' },
+  slabs: {}, moss: { floor: ['slab', 'slabCrack', 'slab'], corr: ['cobble'], wall: 'rock', top: 'rubble' },
   basalt: { floor: ['basalt'], corr: ['basalt'], wall: 'rock', top: 'rubble', cliff: 'basalt' },
   ice: { floor: ['ice'], corr: ['ice'], wall: 'iceWall', top: 'slabTop', cliff: 'iceWall', ao: 0.4 },
   marble: { floor: ['marble'], corr: ['tiles'], wall: 'brick', top: 'slabTop', ao: 0.35 },
-  planks: { floor: ['planks'], corr: ['planks'], wall: 'rock', top: 'woodTop', cliff: 'rock' },
+  planks: { floor: ['planks'], corr: ['planks'], wall: 'rock', top: 'woodTop', cliff: 'rock', norot: true },
 };
 const _lookCache = new Map();
 function lookOf(theme) {
