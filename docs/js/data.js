@@ -153,7 +153,7 @@ const THEMES = [
     golem: 0x3a2a26, cube: 0xff6a1a, bone: 0x3b3433, accent: 0xff4a10, deco: 'lava',
     pit: { c: 0xff4a00, c2: 0xffa000, glow: 1 }, slow: { c: 0x2a2220, name: 'Ash' }, pattern: 'basalt', walls: 'basalt', traps: ['vent', 'spike'],
     light: 0xff7a1a, carpet: 0x5a1a10, carpet2: 0xff7a1a, slime: 0xff5a1a, guard: [0x3a3a40, 0xff6a00], mage: [0x6a1a10, 0xffb000], totem: 0x2a2020, charger: 0x6a2a1a,
-    gfx: { exp: 1.15, gl: 0.9, hemi: 0.62, sun: [0xffa070, 0.9], fog: [25, 50], amb: 'ember', vig: 'rgba(45,6,0,.55)', hero: 0xffd0a0 },
+    gfx: { exp: 1.4, gl: 0.9, hemi: 0.72, sun: [0xffa070, 0.95], fog: [25, 50], amb: 'ember', vig: 'rgba(45,6,0,.55)', hero: 0xffd0a0 },
     boss: { name: 'The Magma Titan', kind: 'titan', body: 0x2e2421, accent: 0xff5a00, skin: 0x2e2421, eye: 0xffd000, sig: ['meteors', 'shock', 'shock'] },
   },
   {
@@ -162,7 +162,7 @@ const THEMES = [
     golem: 0x9fd0ef, cube: 0x4fe0ff, bone: 0xdff3ff, accent: 0x2aa3ff, deco: 'ice',
     pit: { c: 0x0e3a66, c2: 0x2a6aa0, glow: 0 }, slow: { c: 0xf4fbff, name: 'Deep Snow' }, pattern: 'ice', walls: 'crystal', traps: ['spike', 'vent'],
     light: 0x7fe8ff, carpet: 0x2a5a9a, carpet2: 0xdff3ff, slime: 0x8fe8ff, guard: [0x5a8ab0, 0xdff3ff], mage: [0x2a6ab0, 0xffffff], totem: 0x9fe6ff, charger: 0x7a6a5a,
-    gfx: { exp: 0.85, gl: 0.6, hemi: 0.8, sun: [0xe0f0ff, 1.0], fog: [25, 52], amb: 'snow', vig: 'rgba(0,14,40,.5)', hero: 0xe0f4ff },
+    gfx: { exp: 0.74, gl: 0.6, hemi: 0.72, sun: [0xe0f0ff, 0.95], fog: [25, 52], amb: 'snow', vig: 'rgba(0,14,40,.5)', hero: 0xe0f4ff },
     boss: { name: 'The Frost Giant', kind: 'giant', body: 0x8fc4e8, accent: 0xffffff, skin: 0x8fc4e8, eye: 0x00e5ff, sig: ['icicles', 'icicles', 'avalanche'] },
   },
   {
@@ -171,7 +171,7 @@ const THEMES = [
     golem: 0xd8d4e4, cube: 0x8fd0ff, bone: 0xf0f0f0, accent: 0x2a5ad0, deco: 'sky',
     pit: { c: 0x6aaaf0, c2: 0xffffff, glow: 0, sky: true }, slow: { c: 0xffffff, name: 'Cloud Fluff' }, pattern: 'marble', walls: 'banner', traps: ['vent', 'plate'],
     light: 0xfff07a, carpet: 0x2a4ac0, carpet2: 0xffc72c, slime: 0xc8e8ff, guard: [0xc0c8d8, 0xffc72c], mage: [0x2a4ac0, 0xffe14a], totem: 0xe6e2ee, charger: 0x8a7ad0,
-    gfx: { exp: 0.78, gl: 0.35, hemi: 0.85, sun: [0xfff4dc, 1.15], fog: [32, 64], amb: 'cloud', vig: 'rgba(20,40,90,.32)' },
+    gfx: { exp: 0.7, gl: 0.35, hemi: 0.8, sun: [0xfff4dc, 1.05], fog: [32, 64], amb: 'cloud', vig: 'rgba(20,40,90,.32)' },
     boss: { name: 'The Storm Dragon', kind: 'dragon', body: 0x3a5cc8, accent: 0xffe14a, skin: 0x3a5cc8, eye: 0xffffff, sig: ['lightning', 'lightning', 'breath'] },
   },
   {

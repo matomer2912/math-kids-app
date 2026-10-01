@@ -367,6 +367,7 @@ function BoxBatch(mat, opt) {
         });
         geo.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), 0.5 * Math.hypot(x1 - x0, y1 - y0, z1 - z0));
         m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        m.frustumCulled = true; // r149 InstancedMesh defaults to false
         if (shadow) { m.receiveShadow = true; m.castShadow = !g.flat; }
         grp.add(m); out.push(m);
       }
