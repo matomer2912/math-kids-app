@@ -383,6 +383,7 @@ function netFloorReset() {
 // ---------- networking glue ----------
 Net.onMessage = (from, m) => {
   if (!m || !m.t) return;
+  if (Social.onNet(from, m)) return; // gifts + dropped weapons (social.js)
   if (Net.isHost) {
     if (m.t === 'in') hostOnInput(from, m);
     else if (m.t === 'hello') {
