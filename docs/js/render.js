@@ -55,6 +55,14 @@ function removeVis(key) {
 
 let visFrame = 0;
 const VIS_GRACE = 0.5; // guest: keep a player/enemy visual this long when it is missing from the view
+// Follow an interpolated target exactly during normal motion, but blend corrections (after an
+// extrapolation guessed wrong) over ~100 ms instead of snapping; real teleports still snap.
+function followPos(o, tx, tz, dt) {
+  const dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz);
+  if (d > 6 || d <= 12 * dt + 0.02) { o.x = tx; o.z = tz; return; }
+  const k = Math.min(0.5, dt * 12);
+  o.x += dx * k; o.z += dz * k;
+}
 function syncVisuals(dt) {
   const v = G.view; if (!v) return;
   visFrame++;
@@ -75,7 +83,7 @@ function syncVisuals(dt) {
     o.seen = visFrame; o.seenT = T;
     const mine = p.id === G.myId;
     o.px = o.x; o.pz = o.z;
-    o.x = mine ? me.x : p.x; o.z = mine ? me.z : p.z;
+    if (mine) { o.x = me.x; o.z = me.z; } else followPos(o, p.x, p.z, dt);
     const spd = Math.hypot(o.x - o.px, o.z - o.pz) / Math.max(dt, 0.001);
     const wpnW = mine ? equipped().w : p.w, wpnR = mine ? equipped().r : p.r;
     setWeapon(o.model, wpnW, wpnR);
@@ -111,7 +119,7 @@ function syncVisuals(dt) {
     }
     o.seen = visFrame; o.seenT = T;
     o.px = o.x; o.pz = o.z;
-    o.x = e.x; o.z = e.z;
+    if (guest) followPos(o, e.x, e.z, dt); else { o.x = e.x; o.z = e.z; }
     const spd = Math.hypot(o.x - o.px, o.z - o.pz) / Math.max(dt, 0.001);
     o.f = lerpAngle(o.f, e.f, Math.min(1, dt * 12));
     o.obj.position.set(o.x, 0, o.z);
