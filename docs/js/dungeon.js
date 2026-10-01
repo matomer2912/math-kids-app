@@ -431,7 +431,7 @@ const mix = (a, b, t) => { const c = n => Math.round(((a >> n) & 255) * (1 - t) 
 // materials also get the per-world ground mist and the dappled-sun cookie (shared uniforms, one program).
 const LVL_LIGHTS = THREE.ShaderChunk.lights_fragment_begin.replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0');
 function levelMat(m) {
-  if (typeof lookPatch === 'function') { m.onBeforeCompile = sh => lookPatch(sh, false); m.customProgramCacheKey = () => 'lvl'; return m; }
+  if (typeof lookPatch === 'function') { m.onBeforeCompile = sh => lookPatch(sh, false); m.customProgramCacheKey = () => 'lvl' + (lookLow() ? 'L' : ''); return m; }
   m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', LVL_LIGHTS); };
   m.customProgramCacheKey = () => 'lvl';
   return m;

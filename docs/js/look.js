@@ -232,8 +232,11 @@ const LOOK_FS_MAP = `
 #endif
 `;
 const LOOK_COOKIE = `getDirectionalLightInfo( directionalLight, geometry, directLight );
-		if (uLkCookie.x > 0.0) { vec2 cuv = vLkW.xz * uLkCookie.y + vec2(sin(uLkTime * 0.5), cos(uLkTime * 0.37)) * uLkCookie.z * 0.02; float ck = texture2D(uLkCanopy, cuv).r; directLight.color *= mix(1.0, ck * 1.55, uLkCookie.x); }`;
+		#ifndef LOOK_LOW
+		if (uLkCookie.x > 0.0) { vec2 cuv = vLkW.xz * uLkCookie.y + vec2(sin(uLkTime * 0.5), cos(uLkTime * 0.37)) * uLkCookie.z * 0.02; float ck = texture2D(uLkCanopy, cuv).r; directLight.color *= mix(1.0, ck * 1.55, uLkCookie.x); }
+		#endif`;
 const LOOK_MIST = `
+#ifndef LOOK_LOW
 if (uLkMist.x > 0.0) {
   float hm = 1.0 - smoothstep(uLkMist.y, uLkMist.z, vLkW.y);              // deep: pits fill with mist
   float band = 1.0 - smoothstep(-0.2, uLkMist.z, vLkW.y);                  // low band over floors / wall feet
@@ -241,13 +244,18 @@ if (uLkMist.x > 0.0) {
   float mf = uLkMist.x * max(hm * hm, band * (0.12 + 0.75 * smoothstep(0.42, 0.78, n)));
   gl_FragColor.rgb = mix(gl_FragColor.rgb, uLkMistC, clamp(mf, 0.0, 0.92));
 }
+#endif
 #include <tonemapping_fragment>`;
 const LOOK_LIGHTS = THREE.ShaderChunk.lights_fragment_begin
   .replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0')
   .replace('getDirectionalLightInfo( directionalLight, geometry, directLight );', LOOK_COOKIE);
+// Low graphics tier: no ground mist / canopy cookie (keeps textures + AO); the tier is part of the program
+// cache key, so the switch compiles only when the tier changes (gfxApply flags all materials anyway).
+function lookLow() { return typeof GFX !== 'undefined' && GFX.q === 'low'; }
 function lookPatch(sh, tex) {
   Object.assign(sh.uniforms, LOOK_U);
   if (tex) sh.defines = Object.assign(sh.defines || {}, { LOOK_TEX: '' });
+  if (lookLow()) sh.defines = Object.assign(sh.defines || {}, { LOOK_LOW: '' });
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>' + LOOK_VS_DECL).replace('#include <project_vertex>', '#include <project_vertex>' + LOOK_VS);
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + LOOK_FS_DECL)
     .replace('#include <lights_fragment_begin>', LOOK_LIGHTS)
@@ -259,7 +267,7 @@ const LOOK_MATS = {};
 function lookLitMat() {
   if (!LOOK_MATS.lit) {
     const m = new THREE.MeshLambertMaterial({ map: LOOK_ATLAS });
-    m.onBeforeCompile = sh => lookPatch(sh, true); m.customProgramCacheKey = () => 'lvlT';
+    m.onBeforeCompile = sh => lookPatch(sh, true); m.customProgramCacheKey = () => 'lvlT' + (lookLow() ? 'L' : '');
     m.userData.shared = true; LOOK_MATS.lit = m;
   }
   return LOOK_MATS.lit;
