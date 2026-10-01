@@ -27,6 +27,9 @@ const Sim = (() => {
       inp: { atk: false, an: 0, pn: 0, dn: 0 }, last: { an: 0, pn: 0, dn: 0 }, init: false,
     };
     p.maxHp = maxHpFor(p.lvl); p.hp = p.maxHp;
+    // make sure every player has a different color
+    const used = new Set([...S.players.values()].map(o => o.color));
+    if (used.has(p.color)) p.color = PLAYER_COLORS.find(c => !used.has(c)) || p.color;
     S.players.set(id, p);
     return p;
   }
