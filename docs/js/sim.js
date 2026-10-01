@@ -25,9 +25,11 @@ const Sim = (() => {
       x: S.map ? S.map.start.x + (id % 2) * 1.5 : 0, z: S.map ? S.map.start.z + (id > 1 ? 1.5 : 0) : 0, f: 0,
       lvl: info.lvl || 1, wpn: info.wpn || makeItem(1, 0, 'sword'), hp: 0, maxHp: 0,
       downed: false, revive: 0, atkT: 0, scdT: 0, potT: 0, inv: 0, hurtT: 0, atkAnim: 0, floor: S.floor,
+      boosts: {}, skin: '', ph: 0, buffs: { rage: 0, swift: 0, iron: 0 },
       inp: { atk: false, an: 0, pn: 0, dn: 0 }, last: { an: 0, pn: 0, dn: 0 }, init: false,
     };
-    p.maxHp = maxHpFor(p.lvl); p.hp = p.maxHp;
+    applyHeroStats(p, info);
+    p.maxHp = calcMaxHp(p); p.hp = p.maxHp;
     // make sure every player has a different color
     const used = new Set([...S.players.values()].map(o => o.color));
     if (used.has(p.color)) p.color = PLAYER_COLORS.find(c => !used.has(c)) || p.color;
@@ -35,12 +37,29 @@ const Sim = (() => {
     return p;
   }
   function removePlayer(id) { S.players.delete(id); }
+  // merchant extras sent by the player's device: permanent boosts, outfit, phoenix feather carried
+  function applyHeroStats(p, st) {
+    if (st.boosts && typeof st.boosts === 'object') { const b = {}; for (const k of BOOST_KEYS) b[k] = boostRank(st.boosts, k); p.boosts = b; }
+    if (typeof st.skin === 'string') p.skin = HERO_SKINS.some(h => h.id === st.skin) ? st.skin : '';
+    if (st.ph !== undefined) p.ph = st.ph ? 1 : 0;
+  }
+  function calcMaxHp(p) { return Math.round(maxHpFor(p.lvl) * hpBoostMult(p.boosts)); }
   function setStats(id, st) {
     const p = S.players.get(id); if (!p) return;
-    if (st.lvl) { const old = p.maxHp; p.lvl = st.lvl; p.maxHp = maxHpFor(p.lvl); if (p.maxHp > old) p.hp += p.maxHp - old; }
+    if (st.lvl) p.lvl = st.lvl;
+    applyHeroStats(p, st);
+    const old = p.maxHp; p.maxHp = calcMaxHp(p);
+    if (p.maxHp > old) p.hp += p.maxHp - old; else p.hp = Math.min(p.hp, p.maxHp);
     if (st.wpn) p.wpn = st.wpn;
     if (st.name) p.name = st.name;
     if (st.color && ![...S.players.values()].some(o => o !== p && o.color === st.color)) p.color = st.color;
+  }
+  // battle potion drunk on a player's device: timed buff applied here (host)
+  function buff(id, k) {
+    const p = S.players.get(id); if (!p || !POTIONS[k] || !BUFF_KEYS.includes(k)) return false;
+    p.buffs[k] = POTIONS[k].dur;
+    ev('buff', id, k);
+    return true;
   }
   function setInput(id, m) {
     const p = S.players.get(id); if (!p) return;
@@ -61,10 +80,11 @@ const Sim = (() => {
     S.floor = floor; S.seed = seed;
     S.map = genDungeon(seed, floor);
     S.theme = themeFor(floor);
-    S.enemies = []; S.projs = []; S.loot = []; S.boss = null; S.portalOpen = !S.map.boss; S.wipeT = 0;
+    S.enemies = []; S.projs = []; S.loot = []; S.boss = null; S.portalOpen = !S.map.boss; S.wipeT = 0; S.portalT = 0; S.portalNear = 0;
     S.timers = []; S.hz = []; S.waves = []; S.arenas = []; S.trapT = 0;
     S.plateCd = S.map.plates.map(() => 0);
     S.nPlayersAtStart = Math.max(1, S.players.size);
+    navPrep(); S.flowT = 0;
     let k = 0;
     for (const p of S.players.values()) {
       p.x = S.map.start.x + ((k % 2) - 0.5) * 2; p.z = S.map.start.z + (k > 1 ? 1.5 : -0.5); k++;
@@ -88,6 +108,7 @@ const Sim = (() => {
       slow: 0, stun: 0, flash: 0, size: size * (elite ? 1.3 : 1), elite: !!elite, summonT: 4 + R() * 3,
       r: d.r * (elite ? 1.3 : 1) * (opts.small ? 0.7 : 1), small: !!opts.small, trapT: 0,
     };
+    if (!d.prop && !d.still && S.map) unstickPos(e); // big bodies spawned with a small-radius check
     if (type === 'egg') { e.hatch = 5; e.awake = true; }
     if (type === 'totem') e.summonT = 2.5;
     if (type === 'mage') e.blinkT = 3 + R() * 2;
@@ -95,6 +116,7 @@ const Sim = (() => {
     return e;
   }
 
+  const PORTAL_R = 3.2, PORTAL_T = 5; // portal radius, countdown seconds
   const MAX_ENTS = 88;           // network budget: enemies + props per floor
   function freeSpotIn(r, pad, rad) {
     const map = S.map;
@@ -186,43 +208,161 @@ const Sim = (() => {
     });
   }
 
-  // ---------- flow field toward players ----------
-  function updateFlow() {
-    const map = S.map, W = map.W, H = map.H;
-    if (!S.flow || S.flow.length !== W * H) S.flow = new Int16Array(W * H);
-    const fl = S.flow; fl.fill(-1);
-    const q = [];
-    for (const p of alivePlayers()) { const k = tileOf(map, p.x, p.z); if (k >= 0 && k < W * H && fl[k] < 0) { fl[k] = 0; q.push(k); } }
-    for (let h = 0; h < q.length; h++) {
-      const k = q[h]; const d = fl[k];
-      if (d > 40) continue;
+  // ---------- navigation ----------
+  // Walkable = floor tiles only (map.g === T_FLOOR): walls, pits (2) and statues/fountains (3) block.
+  // Flow field: Dijkstra from every living player (Dial's bucket queue, no distance cap). Orthogonal
+  // step 2, diagonal 3 (only when both sides are floor), +1 on tiles that touch a wall/pit/statue so
+  // paths keep to the middle of corridors (big bodies don't snag on corners).
+  const NBX = [1, -1, 0, 0, 1, 1, -1, -1], NBY = [0, 0, 1, -1, 1, -1, 1, -1];
+  function navPrep() {
+    const map = S.map, W = map.W, H = map.H, N = W * H, g = map.g;
+    const nw = new Uint8Array(N);
+    for (let k = 0; k < N; k++) {
+      if (g[k] !== T_FLOOR) continue;
       const x = k % W;
-      if (x + 1 < W && map.g[k + 1] === T_FLOOR && fl[k + 1] < 0) { fl[k + 1] = d + 1; q.push(k + 1); }
-      if (x - 1 >= 0 && map.g[k - 1] === T_FLOOR && fl[k - 1] < 0) { fl[k - 1] = d + 1; q.push(k - 1); }
-      if (k + W < W * H && map.g[k + W] === T_FLOOR && fl[k + W] < 0) { fl[k + W] = d + 1; q.push(k + W); }
-      if (k - W >= 0 && map.g[k - W] === T_FLOOR && fl[k - W] < 0) { fl[k - W] = d + 1; q.push(k - W); }
+      for (let n = 0; n < 8; n++) {
+        const xx = x + NBX[n], m = k + NBX[n] + NBY[n] * W;
+        if (xx < 0 || xx >= W || m < 0 || m >= N || g[m] !== T_FLOOR) { nw[k] = 1; break; }
+      }
+    }
+    S.nearWall = nw; S.flow = new Int32Array(N).fill(-1);
+  }
+  function updateFlow() {
+    const map = S.map, W = map.W, N = W * map.H, g = map.g;
+    if (!S.flow || S.flow.length !== N || !S.nearWall) navPrep();
+    const fl = S.flow, nw = S.nearWall; fl.fill(-1);
+    const B = S.buckets || (S.buckets = [[], [], [], [], [], [], [], []]);
+    for (const b of B) b.length = 0;
+    let pending = 0;
+    for (const p of alivePlayers()) {
+      const k = tileOf(map, p.x, p.z);
+      if (k >= 0 && k < N && g[k] === T_FLOOR && fl[k] !== 0) { fl[k] = 0; B[0].push(k); pending++; }
+    }
+    for (let cur = 0; pending > 0; cur++) {
+      const b = B[cur & 7];
+      while (b.length) {
+        const k = b.pop(); pending--;
+        if (fl[k] !== cur) continue; // stale entry
+        const x = k % W;
+        for (let n = 0; n < 8; n++) {
+          const ox = NBX[n], oy = NBY[n], xx = x + ox;
+          if (xx < 0 || xx >= W) continue;
+          const m = k + ox + oy * W;
+          if (m < 0 || m >= N || g[m] !== T_FLOOR) continue;
+          if (n >= 4 && (g[k + ox] !== T_FLOOR || g[k + oy * W] !== T_FLOOR)) continue;
+          const c = cur + (n >= 4 ? 3 : 2) + nw[m];
+          if (fl[m] < 0 || c < fl[m]) { fl[m] = c; B[c & 7].push(m); pending++; }
+        }
+      }
     }
   }
-  function flowDir(e, tx, tz) {
-    const map = S.map, W = map.W, fl = S.flow;
-    const k = tileOf(map, e.x, e.z);
-    const here = fl[k];
-    const dx = tx - e.x, dz = tz - e.z, dd = Math.hypot(dx, dz) || 1;
-    if (here < 0 || here <= 2 || e.r > 1.2) return [dx / dd, dz / dd];
-    let best = here, bk = -1;
-    const x = k % W;
-    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-    for (const [ox, oy] of nb) {
-      if (x + ox < 0 || x + ox >= W) continue;
-      const n = k + ox + oy * W;
-      if (n < 0 || n >= fl.length || fl[n] < 0) continue;
-      if (ox && oy && (map.g[k + ox] !== T_FLOOR || map.g[k + oy * W] !== T_FLOOR)) continue;
-      if (fl[n] < best) { best = fl[n]; bk = n; }
+  // can a circle of radius r slide straight from (x0,z0) to (x1,z1)?
+  function walkLine(x0, z0, x1, z1, r) {
+    const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.5);
+    for (let i = 1; i <= n; i++) { const t = i / n; if (blockedCircle(S.map, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, r)) return false; }
+    return true;
+  }
+  // line of sight: walls and statues block, pits don't (you can see across a chasm)
+  function seeLine(x0, z0, x1, z1) {
+    const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.7);
+    for (let i = 1; i < n; i++) { const t = i / n; if (isSolidAt(S.map, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false; }
+    return true;
+  }
+  const tileC = k => [((k % S.map.W) + 0.5) * TILE, (Math.floor(k / S.map.W) + 0.5) * TILE];
+  // steepest-descent neighbour on the flow field (diagonals only around clear corners)
+  function flowNext(k) {
+    const map = S.map, W = map.W, fl = S.flow, g = map.g, x = k % W;
+    let best = fl[k] < 0 ? 1e9 : fl[k], bk = -1;
+    for (let n = 0; n < 8; n++) {
+      const ox = NBX[n], oy = NBY[n], xx = x + ox;
+      if (xx < 0 || xx >= W) continue;
+      const m = k + ox + oy * W;
+      if (m < 0 || m >= fl.length || fl[m] < 0) continue;
+      if (n >= 4 && (g[k + ox] !== T_FLOOR || g[k + oy * W] !== T_FLOOR)) continue;
+      if (fl[m] < best) { best = fl[m]; bk = m; }
     }
-    if (bk < 0) return [dx / dd, dz / dd];
-    const cx = ((bk % W) + 0.5) * TILE - e.x, cz = (Math.floor(bk / W) + 0.5) * TILE - e.z;
-    const cd = Math.hypot(cx, cz) || 1;
-    return [cx / cd, cz / cd];
+    return bk;
+  }
+  // Direction for an enemy chasing (tx,tz): straight only with a clear swept line; otherwise follow the
+  // flow field and aim at the farthest of the next few path tiles it can walk straight to (string pulling).
+  function navCompute(e, tx, tz) {
+    const r = e.r * 0.9, dx = tx - e.x, dz = tz - e.z, dd = Math.hypot(dx, dz) || 1;
+    if (dd < 30 && walkLine(e.x, e.z, tx, tz, r)) return [dx / dd, dz / dd];
+    const map = S.map, fl = S.flow;
+    let k = tileOf(map, e.x, e.z);
+    if (!fl || k < 0 || k >= fl.length) return [dx / dd, dz / dd];
+    if (fl[k] < 0) { // standing on an unreached tile (edge of a wall / bad spawn): head to the nearest reached neighbour
+      const nb = flowNext(k);
+      if (nb < 0) return [dx / dd, dz / dd];
+      const [cx, cz] = tileC(nb), cd = Math.hypot(cx - e.x, cz - e.z) || 1;
+      return [(cx - e.x) / cd, (cz - e.z) / cd];
+    }
+    const chain = [];
+    for (let i = 0; i < 5; i++) { const nb = flowNext(k); if (nb < 0) break; chain.push(nb); k = nb; }
+    if (!chain.length) return [dx / dd, dz / dd];
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const [cx, cz] = tileC(chain[i]);
+      if (i === 0 || walkLine(e.x, e.z, cx, cz, r)) {
+        const cd = Math.hypot(cx - e.x, cz - e.z);
+        if (cd < 0.05) continue;
+        return [(cx - e.x) / cd, (cz - e.z) / cd];
+      }
+    }
+    return [dx / dd, dz / dd];
+  }
+  // cached per enemy (recomputed ~7x/s, or right away while unsticking)
+  function flowDir(e, tx, tz) {
+    e.navT = (e.navT || 0) - (S.dt || 0);
+    if (e.unT > 0) return [e.unX, e.unZ];
+    if (e.navT <= 0 || e.ndx === undefined) {
+      e.navT = 0.12 + R() * 0.06;
+      const [x, z] = navCompute(e, tx, tz); e.ndx = x; e.ndz = z;
+    }
+    return [e.ndx, e.ndz];
+  }
+  // pull an entity whose body overlaps a wall / pit / statue out to the nearest free spot
+  function unstickPos(e) {
+    const r = e.r * 0.9;
+    if (!blockedCircle(S.map, e.x, e.z, r)) return false;
+    for (let rad = 0.4; rad <= 7; rad += 0.4) {
+      const n = Math.max(8, Math.round(rad * 6));
+      let best = null, bd = 1e9;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * 6.283, x = e.x + Math.sin(a) * rad, z = e.z + Math.cos(a) * rad;
+        if (blockedCircle(S.map, x, z, r)) continue;
+        const k = tileOf(S.map, x, z), f = S.flow && S.flow[k] >= 0 ? S.flow[k] : 1e6;
+        if (f < bd) { bd = f; best = [x, z]; }
+      }
+      if (best) { e.x = best[0]; e.z = best[1]; e.kx = e.kz = 0; return true; }
+    }
+    return false;
+  }
+  // stuck watchdog for chasing enemies: < 0.3 units of progress in ~0.7 s while trying to move
+  // -> slide sideways / take another flow neighbour for a moment, then re-path
+  function stuckCheck(e, dt, wantX, wantZ) {
+    if (e.stkX === undefined) { e.stkX = e.x; e.stkZ = e.z; e.stkT = 0; e.stkMv = 0; }
+    e.stkT += dt; e.stkMv += dt;
+    if (e.stkT < 0.7) return;
+    const moved = Math.hypot(e.x - e.stkX, e.z - e.stkZ);
+    if (e.stkMv > 0.5 && moved < 0.3) {
+      e.stuckN = (e.stuckN || 0) + 1;
+      if (unstickPos(e)) { e.stuckN = 0; }
+      else {
+        const r = e.r * 0.9, side = (e.stuckN & 1) ? 1 : -1;
+        const opts = [];
+        for (const a of [1.57 * side, -1.57 * side, 0.785 * side, -0.785 * side, 2.36 * side, -2.36 * side, 3.14]) {
+          const c = Math.cos(a), s = Math.sin(a);
+          opts.push([wantX * c - wantZ * s, wantX * s + wantZ * c]);
+        }
+        const k = tileOf(S.map, e.x, e.z), nb = S.flow ? flowNext(k) : -1;
+        if (nb >= 0) { const [cx, cz] = tileC(nb), cd = Math.hypot(cx - e.x, cz - e.z) || 1; opts.unshift([(cx - e.x) / cd, (cz - e.z) / cd]); }
+        for (const [ox, oz] of opts) {
+          if (!blockedCircle(S.map, e.x + ox * 0.7, e.z + oz * 0.7, r)) { e.unX = ox; e.unZ = oz; e.unT = 0.5 + 0.15 * Math.min(4, e.stuckN); break; }
+        }
+      }
+      e.navT = 0;
+    } else if (moved > 0.6) e.stuckN = 0;
+    e.stkT = 0; e.stkMv = 0; e.stkX = e.x; e.stkZ = e.z;
   }
 
   // ---------- combat helpers ----------
@@ -241,7 +381,7 @@ const Sim = (() => {
     return p.f;
   }
   function playerDmg(p) {
-    let d = itemDmg(p.wpn) * (1 + 0.06 * (p.lvl - 1));
+    let d = itemDmg(p.wpn) * (1 + 0.06 * (p.lvl - 1)) * dmgBoostMult(p.boosts) * (p.buffs.rage > 0 ? 1.5 : 1);
     const critC = 0.08 + (p.wpn.e.includes('crit') ? 0.25 : 0);
     const crit = R() < critC;
     return { d: crit ? d * 2.2 : d, crit };
@@ -296,9 +436,14 @@ const Sim = (() => {
 
   function hurtPlayer(p, amt) {
     if (p.downed || p.inv > 0 || p.hurtT > 0) return;
-    amt = Math.round(amt * scaleDmg(S.floor));
+    amt = Math.round(amt * scaleDmg(S.floor) * (p.buffs.iron > 0 ? 0.5 : 1));
     p.hp -= amt; p.hurtT = 0.25;
     ev('hurt', p.id, amt);
+    if (p.hp <= 0 && p.ph) { // Phoenix Feather: straight back up (the owner's device uses one up)
+      p.ph = 0; p.hp = Math.round(p.maxHp * 0.5); p.inv = 2;
+      ev('phoenix', p.id); ev('ring', r1(p.x), r1(p.z), 3, 0xff9a2a); ev('sfx', 'fanfare');
+      return;
+    }
     if (p.hp <= 0) {
       p.hp = 0; p.downed = true; p.revive = 0;
       ev('down', p.id);
@@ -394,7 +539,7 @@ const Sim = (() => {
   // ---------- player actions ----------
   function doAttack(p) {
     const W = WEAPONS[p.wpn.w];
-    p.atkT = itemRate(p.wpn);
+    p.atkT = itemRate(p.wpn) / (p.buffs.swift > 0 ? 1.3 : 1);
     p.atkAnim = 0.28;
     if (W.kind === 'melee') {
       const ang = aimFor(p, W.range + 2.5);
@@ -457,7 +602,22 @@ const Sim = (() => {
   function wake(e) {
     if (e.awake || e.d.prop) return;
     e.awake = true;
-    for (const o of S.enemies) if (!o.awake && !o.d.prop && o.type !== 'boss' && Math.hypot(o.x - e.x, o.z - e.z) < 9) o.awake = true;
+    // pack aggro: only friends in the same room or that can see the alerted one
+    const map = S.map, rm = map.rid[tileOf(map, e.x, e.z)];
+    for (const o of S.enemies) {
+      if (o.awake || o.d.prop || o.type === 'boss' || Math.hypot(o.x - e.x, o.z - e.z) >= 9) continue;
+      const ro = map.rid[tileOf(map, o.x, o.z)];
+      if ((rm >= 0 && ro === rm) || seeLine(o.x, o.z, e.x, e.z)) o.awake = true;
+    }
+  }
+  // a sleeping enemy notices a player it can see (13 units), or one that is right next to it (< 3)
+  function noticed(e) {
+    for (const p of S.players.values()) {
+      if (p.downed) continue;
+      const d = Math.hypot(p.x - e.x, p.z - e.z);
+      if (d < 3 || (d < 13 && seeLine(e.x, e.z, p.x, p.z))) return true;
+    }
+    return false;
   }
 
   function nearestPlayer(e) {
@@ -471,9 +631,34 @@ const Sim = (() => {
   }
 
   function moveEnemy(e, dirx, dirz, spd, dt) {
-    const m = spd * dt * (e.slow > 0 ? 0.5 : 1);
-    moveCircle(S.map, e, dirx * m, dirz * m, e.r * 0.9);
+    const m = spd * dt * (e.slow > 0 ? 0.5 : 1), r = e.r * 0.9;
+    const x0 = e.x, z0 = e.z;
+    const hit = moveCircle(S.map, e, dirx * m, dirz * m, r);
+    if (hit && m > 0 && (e.x - x0) ** 2 + (e.z - z0) ** 2 < (m * 0.35) ** 2) {
+      // corner sliding: try turning 45° / 90° (keep the side that worked last time)
+      const sd = e.slideSide || 1;
+      for (const a of [0.785 * sd, -0.785 * sd, 1.4 * sd, -1.4 * sd]) {
+        e.x = x0; e.z = z0;
+        const c = Math.cos(a), s = Math.sin(a);
+        moveCircle(S.map, e, (dirx * c - dirz * s) * m * 0.8, (dirx * s + dirz * c) * m * 0.8, r);
+        if ((e.x - x0) ** 2 + (e.z - z0) ** 2 > (m * 0.3) ** 2) { e.slideSide = a > 0 ? 1 : -1; break; }
+      }
+    }
     if (dirx || dirz) e.f = Math.atan2(dirx, dirz);
+  }
+  // follow the flow field toward (tx,tz) with the stuck watchdog
+  function chase(e, tx, tz, spd, dt) {
+    const [fx, fz] = flowDir(e, tx, tz);
+    moveEnemy(e, fx, fz, spd, dt);
+    if (e.chF !== S.frame - 1) { e.stkX = undefined; }
+    e.chF = S.frame;
+    stuckCheck(e, dt, fx, fz);
+  }
+  // cached line-of-sight to the target (re-checked ~10x/s)
+  function losTo(e, tp) {
+    e.losT = (e.losT || 0) - (S.dt || 0);
+    if (e.losT <= 0 || e.losP !== tp.id) { e.losT = 0.1; e.losP = tp.id; e.los = seeLine(e.x, e.z, tp.x, tp.z); }
+    return e.los;
   }
   function clearLine(x0, z0, x1, z1) {
     const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 0.8);
@@ -509,13 +694,19 @@ const Sim = (() => {
       if (e.hatch < 1.2) e.flash = Math.sin(e.hatch * 25) > 0 ? 0.05 : 0;
       if (e.hatch <= 0) {
         e.hp = 0; ev('die', r1(e.x), r1(e.z), e.sk, e.size); ev('ring', r1(e.x), r1(e.z), 2, 0xff4a8a);
-        for (let i = 0; i < 2; i++) { const s = spawnEnemy('runner', e.x + R.range(-0.8, 0.8), e.z + R.range(-0.8, 0.8)); s.awake = true; if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z; } }
+        for (let i = 0; i < 2; i++) { const s = spawnEnemy('runner', e.x + R.range(-0.8, 0.8), e.z + R.range(-0.8, 0.8)); s.awake = true; if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z; } unstickPos(s); }
       }
       return;
     }
+    if (e.unT > 0) e.unT -= dt;
     if (e.stun > 0) { e.stun -= dt; e.st = e.st === 'wind' ? 'chase' : e.st; return; }
     const [tp, dist] = nearestPlayer(e);
-    if (!e.awake) { if (tp && dist < 13) wake(e); else return; }
+    if (!e.awake) {
+      e.wakeT = (e.wakeT || R() * 0.25) - dt;
+      if (e.wakeT > 0) return;
+      e.wakeT = 0.25;
+      if (tp && dist < 13 && noticed(e)) wake(e); else return;
+    }
     if (!tp) { e.st = 'idle'; return; }
     if (e.type === 'boss') return updateBoss(e, tp, dist, dt);
     const d = e.d;
@@ -533,7 +724,7 @@ const Sim = (() => {
           ev('ring', r1(e.x), r1(e.z), 2.6, S.theme.accent);
           const a = R() * 6.28;
           const s = spawnEnemy(R() < 0.6 ? 'runner' : 'grunt', e.x + Math.sin(a) * 1.6, e.z + Math.cos(a) * 1.6);
-          s.awake = true; s.parent = e.id; if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z + 1.2; }
+          s.awake = true; s.parent = e.id; if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z + 1.2; } unstickPos(s);
         }
       }
       return;
@@ -555,9 +746,9 @@ const Sim = (() => {
         }
         return;
       }
-      if (dist > 7.5 || !clearLine(e.x, e.z, tp.x, tp.z)) { const [fx, fz] = flowDir(e, tp.x, tp.z); moveEnemy(e, fx, fz, spd, dt); }
+      if (dist > 7.5 || !losTo(e, tp)) chase(e, tp.x, tp.z, spd, dt);
       else e.f = ang;
-      if (dist < d.range && e.cd <= 0 && clearLine(e.x, e.z, tp.x, tp.z)) {
+      if (dist < d.range && e.cd <= 0 && losTo(e, tp) && clearLine(e.x, e.z, tp.x, tp.z)) {
         e.st = 'wind'; e.t = d.wind; e.cang = ang; e.f = ang;
         ev('teleline', r1(e.x), r1(e.z), r2(ang), Math.min(12, dist + 3), d.wind);
       }
@@ -621,16 +812,17 @@ const Sim = (() => {
       if (e.summonT <= 0 && S.enemies.length < 90) {
         e.summonT = 7;
         ev('ring', r1(e.x), r1(e.z), 2.5, 0xb050ff);
-        for (let i = 0; i < 2; i++) { const s = spawnEnemy('grunt', e.x + R.range(-1.5, 1.5), e.z + R.range(-1.5, 1.5)); s.awake = true; if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z; } }
+        for (let i = 0; i < 2; i++) { const s = spawnEnemy('grunt', e.x + R.range(-1.5, 1.5), e.z + R.range(-1.5, 1.5)); s.awake = true; if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z; } unstickPos(s); }
       }
     }
 
     if (d.ranged) {
       const want = e.type === 'caster' ? 8 : e.type === 'bomber' ? 8 : 9;
-      if (dist > d.range) { const [fx, fz] = flowDir(e, tp.x, tp.z); moveEnemy(e, fx, fz, spd, dt); }
+      const los = dist <= d.range && losTo(e, tp);
+      if (dist > d.range || !los) chase(e, tp.x, tp.z, spd, dt);
       else if (dist < want - 3) moveEnemy(e, -Math.sin(ang), -Math.cos(ang), spd * 0.8, dt);
       else e.f = ang;
-      if (dist <= d.range && e.cd <= 0) {
+      if (los && e.cd <= 0) {
         e.st = 'wind'; e.t = d.wind; e.f = ang;
         if (e.type === 'caster' || e.type === 'mage') ev('sfx', 'magic');
         if (e.type === 'bomber') { e.tx = tp.x; e.tz = tp.z; }
@@ -639,13 +831,14 @@ const Sim = (() => {
       const prevF = e.f;
       let mspd = spd;
       if (e.type === 'slime') { e.hop = (e.hop || R() * 6) + dt * 5.5; mspd = spd * (Math.sin(e.hop) > 0 ? 1.7 : 0.15); }
-      if (dist > d.range * 0.85) { const [fx, fz] = flowDir(e, tp.x, tp.z); moveEnemy(e, fx, fz, mspd, dt); }
+      const near = dist <= d.range * 0.85 && losTo(e, tp);
+      if (!near) chase(e, tp.x, tp.z, mspd, dt);
       else e.f = ang;
       if (e.type === 'shield') { // turns slowly so you can run around it
         const want = e.f, da = wrapA(want - prevF);
         e.f = prevF + Math.max(-2.4 * dt, Math.min(2.4 * dt, da));
       }
-      if (dist <= d.range && e.cd <= 0) {
+      if (dist <= d.range && e.cd <= 0 && (near || losTo(e, tp))) {
         e.st = 'wind'; e.t = d.wind * (e.elite ? 0.85 : 1); e.f = e.type === 'shield' ? e.f : ang;
         if (e.type === 'boomer') ev('sfx', 'fuse');
         if (e.type === 'brute') { const fx = e.x + Math.sin(e.f) * 1.6, fz = e.z + Math.cos(e.f) * 1.6; ev('tele', r1(fx), r1(fz), 2.8, d.wind); }
@@ -682,7 +875,7 @@ const Sim = (() => {
     e.t -= dt;
     switch (e.st) {
       case 'idle': {
-        if (dist > 4) moveEnemy(e, Math.sin(ang), Math.cos(ang), ENEMIES.boss.spd * (P2 ? 1.3 : 1), dt);
+        if (dist > 4) chase(e, tp.x, tp.z, ENEMIES.boss.spd * (P2 ? 1.3 : 1), dt);
         else e.f = ang;
         if (e.t <= 0) {
           const sig = B.sig || [];
@@ -809,7 +1002,7 @@ const Sim = (() => {
               const a = (i / n) * 6.28;
               const s = spawnEnemy(R() < 0.6 ? 'grunt' : 'runner', e.x + Math.sin(a) * 4, e.z + Math.cos(a) * 4);
               s.awake = true;
-              if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z + 3; }
+              if (blockedCircle(S.map, s.x, s.z, s.r)) { s.x = e.x; s.z = e.z + 3; } unstickPos(s);
             }
           }
           e.st = 'idle'; e.t = 1.5 * fast;
@@ -1031,11 +1224,12 @@ const Sim = (() => {
   // ---------- main update ----------
   function update(dt) {
     if (!S.map) return;
-    S.time += dt;
+    S.time += dt; S.dt = dt; S.frame = (S.frame || 0) + 1;
 
     // players
     for (const p of S.players.values()) {
       p.atkT -= dt; p.scdT -= dt; p.potT -= dt; p.inv -= dt; p.hurtT -= dt; p.atkAnim -= dt;
+      for (const k of BUFF_KEYS) if (p.buffs[k] > 0) p.buffs[k] -= dt;
       const inp = p.inp;
       if (inp.dn !== p.last.dn) { p.last.dn = inp.dn; p.inv = 0.4; }
       if (p.downed) {
@@ -1048,7 +1242,7 @@ const Sim = (() => {
       }
       if (inp.atk && p.atkT <= 0) doAttack(p);
       if (inp.an !== p.last.an) { p.last.an = inp.an; if (p.scdT <= 0) doSpecial(p); }
-      if (inp.pn !== p.last.pn) { p.last.pn = inp.pn; if (p.potT <= 0) { p.potT = COOLDOWN.potion * 0.95; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.6); ev('heal', p.id); } }
+      if (inp.pn !== p.last.pn) { p.last.pn = inp.pn; if (p.potT <= 0) { p.potT = COOLDOWN.potion * 0.95; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * potionHealFrac(p.boosts)); ev('heal', p.id); } }
     }
 
     S.flowT -= dt;
@@ -1135,10 +1329,16 @@ const Sim = (() => {
       S.wipeT += dt;
       if (S.wipeT > 3 && Sim.onWipe) { S.wipeT = -99; Sim.onWipe(); }
     } else if (S.portalOpen) {
-      const near = alive.filter(p => Math.hypot(p.x - S.map.exit.x, p.z - S.map.exit.z) < 3.2).length;
+      // everyone alive must stand in the portal; then a 5 s countdown runs (anyone stepping out cancels it)
+      const near = alive.filter(p => Math.hypot(p.x - S.map.exit.x, p.z - S.map.exit.z) < PORTAL_R).length;
       S.portalNear = near;
-      if (near > 0 && near >= alive.length && Sim.onExit) { S.portalOpen = false; Sim.onExit(); }
-    }
+      if (near > 0 && near >= alive.length) {
+        if (S.portalT <= 0) { S.portalT = PORTAL_T; ev('sfx', 'portal'); }
+        S.portalT -= dt;
+        if (S.portalT <= 0 && Sim.onExit) { S.portalT = 0; S.portalOpen = false; Sim.onExit(); }
+        else if (S.portalT <= 0) S.portalT = 0.001;
+      } else S.portalT = 0;
+    } else S.portalT = 0;
   }
 
   // ---------- snapshot for guests ----------
@@ -1146,7 +1346,8 @@ const Sim = (() => {
   // Positions are quantized to ints (x*QP), angles to ints (rad*QA), velocities to ints (v*QV).
   // Only entities within INTEREST_R of the guest are included (players always), nearest first.
   // Static per-entity data is appended only while the guest may not have it yet:
-  //   p: [id, x, z, f, hp, flags(1 downed, 2 attacking, revive*10 << 2), aim]  + [maxHp, wpn, rarity, color, lvl, name]
+  //   p: [id, x, z, f, hp, flags(1 downed, 2 attacking, revive*10 << 2 (5 bits), 128 rage, 256 swift, 512 iron), aim]
+  //      + [maxHp, wpn, rarity, color, lvl, name, skin]
   //   e: [id, x, z, f, hp%, flags(1 wind, 2 flash, 4 burn, 8 slow, 16 elite, 32 awake)] + [skin index (SKINS), size*20]
   //   j: [id, x, z] + [kind index (PROJ_KINDS), vx*QV, vz*QV, col]
   //   l: [id, x, z] + [kind, rarity, weapon]
@@ -1158,7 +1359,8 @@ const Sim = (() => {
   const qp = v => Math.round(v * QP);
   const qa = v => Math.round(Math.atan2(Math.sin(v), Math.cos(v)) * QA);
   function eflags(e) { return (e.st === 'wind' ? 1 : 0) | (e.flash > 0 ? 2 : 0) | (e.burn > 0 ? 4 : 0) | (e.slow > 0 ? 8 : 0) | (e.elite ? 16 : 0) | (e.awake ? 32 : 0); }
-  function playerSig(p) { return [p.maxHp, p.wpn.w, p.wpn.r, p.color, p.lvl, p.name]; }
+  function playerSig(p) { return [p.maxHp, p.wpn.w, p.wpn.r, p.color, p.lvl, p.name, p.skin || '']; }
+  function pflags(p) { let f = (p.downed ? 1 : 0) | (p.atkAnim > 0 ? 2 : 0) | (Math.min(31, Math.round(p.revive * 10)) << 2); BUFF_KEYS.forEach((k, i) => { if (p.buffs[k] > 0) f |= 128 << i; }); return f; }
   function snapshot(forId, g, maxE, maxJ, view) {
     const fp = S.players.get(forId);
     const cx = fp ? fp.x : (S.map ? S.map.start.x : 0), cz = fp ? fp.z : (S.map ? S.map.start.z : 0);
@@ -1187,7 +1389,7 @@ const Sim = (() => {
     const ps = [];
     for (const p of S.players.values()) {
       const v = view && view.get(p.id);
-      const a = [p.id, qp(v ? v.x : p.x), qp(v ? v.z : p.z), qa(v ? v.f : p.f), Math.round(p.hp), (p.downed ? 1 : 0) | (p.atkAnim > 0 ? 2 : 0) | (Math.round(p.revive * 10) << 2), qa(p.aim || p.f)];
+      const a = [p.id, qp(v ? v.x : p.x), qp(v ? v.z : p.z), qa(v ? v.f : p.f), Math.round(p.hp), pflags(p), qa(p.aim || p.f)];
       const sig = playerSig(p);
       if (need('p' + p.id, sig.join('|'))) a.push(...sig);
       ps.push(a);
@@ -1215,15 +1417,18 @@ const Sim = (() => {
     return {
       t: 's', fl: S.floor, p: ps, e: es, j: js, l: ls,
       b: S.boss ? [S.boss.name, Math.round(1000 * S.boss.hp / S.boss.maxHp)] : 0,
-      po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0, k,
+      po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0, k, pt: portalTenths(),
     };
   }
 
+  // portal countdown for the HUD: tenths of a second left (0 = not counting)
+  function portalTenths() { return S.portalOpen && S.portalT > 0 ? Math.max(1, Math.ceil(S.portalT * 10)) : 0; }
   function r1(v) { return Math.round(v * 10) / 10; }
   function r2(v) { return Math.round(v * 100) / 100; }
 
   return {
     S, addPlayer, removePlayer, setStats, setInput, startFloor, update, snapshot, nearestEnemy, eflags, QP, QA, QV,
+    buff, pflags, portalTenths, PORTAL_R, PORTAL_T,
     __spawn: spawnEnemy, __dmg: dmgEnemy, // test hooks
     onGrant: null, onExit: null, onWipe: null, onEvent: null,
   };
