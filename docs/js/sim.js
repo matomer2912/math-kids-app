@@ -44,8 +44,13 @@ const Sim = (() => {
   function setInput(id, m) {
     const p = S.players.get(id); if (!p) return;
     if (m.fl !== S.floor) return; // stale packet from previous floor
+    // Inputs ride the unreliable channel and can arrive out of order: ignore older ones.
+    // (counters an/pn/dn are cumulative, so a skipped packet loses nothing)
+    if (m.ts !== undefined) { if (p.inTs !== undefined && m.ts <= p.inTs && m.ts > p.inTs - 60000) return; p.inTs = m.ts; }
+    if (!(isFinite(m.x) && isFinite(m.z))) return;
     if (!p.downed) { p.x = m.x; p.z = m.z; }
-    p.f = m.f; p.moving = m.mv;
+    if (isFinite(m.f)) p.f = m.f;
+    p.moving = m.mv;
     p.inp.atk = !!m.atk; p.inp.an = m.an; p.inp.pn = m.pn; p.inp.dn = m.dn;
     if (!p.init) { p.last.an = m.an; p.last.pn = m.pn; p.last.dn = m.dn; p.init = true; }
   }
@@ -641,20 +646,80 @@ const Sim = (() => {
   }
 
   // ---------- snapshot for guests ----------
-  function snapshot(forId) {
+  // Compact, per-guest state message (sent ~20x/s on the unreliable channel; keep it < ~1100 bytes).
+  // Positions are quantized to ints (x*QP), angles to ints (rad*QA), velocities to ints (v*QV).
+  // Only entities within INTEREST_R of the guest are included (players always), nearest first.
+  // Static per-entity data is appended only while the guest may not have it yet:
+  //   p: [id, x, z, f, hp, flags(1 downed, 2 attacking, revive*10 << 2), aim]  + [maxHp, wpn, rarity, color, lvl, name]
+  //   e: [id, x, z, f, hp%, flags(1 wind, 2 flash, 4 burn, 8 slow, 16 elite, 32 awake)] + [skin index (SKINS), size*20]
+  //   j: [id, x, z] + [kind index (PROJ_KINDS), vx*QV, vz*QV, col]
+  //   l: [id, x, z] + [kind, rarity, weapon]
+  // g (per-guest net state, optional): { ack, known: Map(key -> first seq it was sent with static) }.
+  //   Static is included while known has no entry or entry > ack. The caller records what was sent
+  //   via g.inc (all keys) and g.st (keys sent with static) and commits them after sending.
+  // view (optional Map id -> {x, z, f}): display positions for players (smoothed remote players).
+  const QP = 20, QA = 40, QV = 10, INTEREST_R = 28;
+  const qp = v => Math.round(v * QP);
+  const qa = v => Math.round(Math.atan2(Math.sin(v), Math.cos(v)) * QA);
+  function eflags(e) { return (e.st === 'wind' ? 1 : 0) | (e.flash > 0 ? 2 : 0) | (e.burn > 0 ? 4 : 0) | (e.slow > 0 ? 8 : 0) | (e.elite ? 16 : 0) | (e.awake ? 32 : 0); }
+  function playerSig(p) { return [p.maxHp, p.wpn.w, p.wpn.r, p.color, p.lvl, p.name]; }
+  function snapshot(forId, g, maxE, maxJ, view) {
+    const fp = S.players.get(forId);
+    const cx = fp ? fp.x : (S.map ? S.map.start.x : 0), cz = fp ? fp.z : (S.map ? S.map.start.z : 0);
+    const R2 = INTEREST_R * INTEREST_R;
+    if (g) { g.inc = []; g.st = []; }
+    const need = (key, sig) => {
+      if (!g) return true;
+      g.inc.push(key);
+      if (sig !== undefined) { if (g.sig.get(key) !== sig) { g.sig.set(key, sig); g.known.delete(key); } }
+      const k = g.known.get(key);
+      if (k !== undefined && k <= g.ack) return false;
+      g.st.push(key);
+      return true;
+    };
+    const near = (list, max) => {
+      const out = [];
+      for (const o of list) {
+        if (o.hp !== undefined && o.hp <= 0) continue;
+        const d = (o.x - cx) * (o.x - cx) + (o.z - cz) * (o.z - cz);
+        if (d <= R2) out.push([d, o]);
+      }
+      out.sort((a, b) => a[0] - b[0]);
+      if (max !== undefined && out.length > max) out.length = max;
+      return out;
+    };
     const ps = [];
-    for (const p of S.players.values()) ps.push([p.id, r2(p.x), r2(p.z), r2(p.f), Math.round(p.hp), p.maxHp, (p.downed ? 1 : 0) | (p.atkAnim > 0 ? 2 : 0), p.wpn.w, p.wpn.r, p.color, p.lvl, p.name, Math.round(p.revive * 10), r2(p.aim || p.f)]);
+    for (const p of S.players.values()) {
+      const v = view && view.get(p.id);
+      const a = [p.id, qp(v ? v.x : p.x), qp(v ? v.z : p.z), qa(v ? v.f : p.f), Math.round(p.hp), (p.downed ? 1 : 0) | (p.atkAnim > 0 ? 2 : 0) | (Math.round(p.revive * 10) << 2), qa(p.aim || p.f)];
+      const sig = playerSig(p);
+      if (need('p' + p.id, sig.join('|'))) a.push(...sig);
+      ps.push(a);
+    }
     const es = [];
-    for (const e of S.enemies) es.push([e.id, e.sk, r2(e.x), r2(e.z), r2(e.f), Math.round(100 * e.hp / e.maxHp), (e.st === 'wind' ? 1 : 0) | (e.flash > 0 ? 2 : 0) | (e.burn > 0 ? 4 : 0) | (e.slow > 0 ? 8 : 0) | (e.elite ? 16 : 0) | (e.awake ? 32 : 0), r2(e.size)]);
+    for (const [, e] of near(S.enemies, maxE)) {
+      const a = [e.id, qp(e.x), qp(e.z), qa(e.f), Math.round(100 * e.hp / e.maxHp), eflags(e)];
+      if (need('e' + e.id)) a.push(e.sk, Math.round(e.size * 20));
+      es.push(a);
+    }
     const js = [];
-    for (const p of S.projs) js.push([p.id, PROJ_KINDS.indexOf(p.k), r2(p.x), r2(p.z), r2(p.vx), r2(p.vz), p.col || 0]);
+    for (const [, p] of near(S.projs, maxJ)) {
+      const a = [p.id, qp(p.x), qp(p.z)];
+      if (need('j' + p.id)) a.push(PROJ_KINDS.indexOf(p.k), Math.round(p.vx * QV), Math.round(p.vz * QV), p.col || 0);
+      js.push(a);
+    }
     const ls = [];
-    for (const l of S.loot) if (l.owner === -1 || l.owner === forId) ls.push([l.id, l.kind, r2(l.x), r2(l.z), l.item ? l.item.r : 0, l.item ? l.item.w : '']);
+    for (const [, l] of near(S.loot.filter(l => l.owner === -1 || l.owner === forId))) {
+      const a = [l.id, qp(l.x), qp(l.z)];
+      if (need('l' + l.id)) a.push(l.kind, l.item ? l.item.r : 0, l.item ? l.item.w : '');
+      ls.push(a);
+    }
+    let k = 0;
+    for (const e of S.enemies) if (!e.d.prop && e.hp > 0) k++;
     return {
       t: 's', fl: S.floor, p: ps, e: es, j: js, l: ls,
       b: S.boss ? [S.boss.name, Math.round(1000 * S.boss.hp / S.boss.maxHp)] : 0,
-      po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0,
-      k: S.enemies.filter(e => !e.d.prop).length,
+      po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0, k,
     };
   }
 
@@ -662,7 +727,7 @@ const Sim = (() => {
   function r2(v) { return Math.round(v * 100) / 100; }
 
   return {
-    S, addPlayer, removePlayer, setStats, setInput, startFloor, update, snapshot, nearestEnemy,
+    S, addPlayer, removePlayer, setStats, setInput, startFloor, update, snapshot, nearestEnemy, eflags, QP, QA, QV,
     onGrant: null, onExit: null, onWipe: null, onEvent: null,
   };
 })();

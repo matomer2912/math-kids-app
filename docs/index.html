@@ -184,24 +184,45 @@ input[type=text] { width:100%; font:inherit; font-size:18px; font-weight:800; pa
 </div>
 
 <div id="lobby" class="screen hidden">
-  <div class="col" style="max-width:520px">
-    <div class="title"><h1 style="font-size:40px">CO-OP LOBBY</h1></div>
-    <div class="card hint">
-      📶 Best: kids join your phone's <b>Wi-Fi hotspot</b> (fastest, works with no signal).<br>
-      📱 Mobile data works too, while there's signal.<br>
-      👉 Kids tap <b>Join Co-op</b>, you tap <b>Add Player</b>, then swap QR codes
+  <div class="col" style="max-width:420px;text-align:center">
+    <div class="title"><h1 style="font-size:34px">CO-OP LOBBY</h1></div>
+    <div class="card" id="roomCard">
+      <div class="hint">Kids: tap <b>Join Co-op</b> and type this code<br>(or scan the QR with the camera app)</div>
+      <div id="roomCode" class="roomcode">····</div>
+      <canvas id="roomQR" class="roomqr"></canvas>
+      <div id="roomStatus" class="hint" style="margin-top:8px"></div>
     </div>
+  </div>
+  <div class="col" style="max-width:420px">
     <div class="card plist" id="lobbyList"></div>
-    <button class="big blue" id="addPlayerBtn">➕ Add Player</button>
     <button class="big green" id="startCoopBtn">▶ Start Adventure!</button>
+    <button class="big blue" id="addPlayerBtn" style="font-size:17px">📷 No signal? Add player with QR</button>
+    <div class="card hint">📶 Fastest: kids on your phone's <b>Wi-Fi hotspot</b>. The code needs signal once to connect; the QR button works with no signal at all.</div>
     <button class="big gray" id="lobbyBack">Back</button>
+  </div>
+</div>
+
+<div id="join" class="screen hidden">
+  <div class="col" style="max-width:420px;text-align:center">
+    <div class="title"><h1 style="font-size:34px">JOIN CO-OP</h1></div>
+    <div class="card">
+      <div class="hint">Type the 4-letter code from the host's screen</div>
+      <input id="codeIn" type="text" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" placeholder="····">
+      <div id="joinStatus" class="hint" style="min-height:20px;margin-top:8px"></div>
+    </div>
+  </div>
+  <div class="col" style="max-width:420px">
+    <button class="big green" id="codeGoBtn">▶ Join</button>
+    <button class="big blue" id="scanCodeBtn">📷 Scan code</button>
+    <button class="big gray" id="offlineJoinBtn" style="font-size:16px;padding:12px">📶 No signal? Offline QR join</button>
+    <button class="big gray" id="joinBack" style="font-size:16px;padding:12px">Back</button>
   </div>
 </div>
 
 <div id="wait" class="screen hidden">
   <div class="col" style="text-align:center">
     <div class="title"><h1 style="font-size:40px">CONNECTED! ✅</h1></div>
-    <div class="card hint" style="font-size:18px">Waiting for the host to start the adventure…</div>
+    <div class="card hint" id="waitMsg" style="font-size:18px">Waiting for the host to start the adventure…</div>
     <button class="big gray" id="waitBack">Leave</button>
   </div>
 </div>
@@ -226,6 +247,7 @@ input[type=text] { width:100%; font:inherit; font-size:18px; font-weight:800; pa
 <script src="lib/three.min.js"></script>
 <script src="lib/qrcode.js"></script>
 <script src="lib/jsQR.js"></script>
+<script src="lib/peerjs.min.js"></script>
 <script src="net.js"></script>
 <script src="js/data.js"></script>
 <script src="js/dungeon.js"></script>
