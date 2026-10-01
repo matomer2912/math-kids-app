@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Net Test</title>
+<style>
+  body { margin: 0; padding: 16px; background: #111827; color: #f3f4f6; font: 18px system-ui, sans-serif; }
+  h1 { font-size: 24px; margin: 0 0 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+  button { min-height: 56px; padding: 8px 20px; font-size: 20px; font-weight: 700; border: 0; border-radius: 14px; background: #3b82f6; color: #fff; }
+  button.alt { background: #22c55e; }
+  button.gray { background: #6b7280; }
+  input { flex: 1; min-width: 120px; font-size: 20px; padding: 10px; border-radius: 10px; border: 0; }
+  #status { font-weight: 700; color: #9fd3ff; }
+  #log { background: #000; padding: 10px; border-radius: 10px; height: 40vh; overflow: auto; font: 14px ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Net test</h1>
+<div id="status">Not connected</div>
+<div class="row">
+  <button id="host">Host + Add player</button>
+  <button id="add" class="alt">Add another player</button>
+  <button id="join">Join game</button>
+  <button id="disc" class="gray">Disconnect</button>
+</div>
+<div class="row">
+  <input id="text" placeholder="Chat message" value="hello">
+  <button id="send">Send</button>
+  <button id="ping" class="alt">Ping</button>
+  <button id="flood" class="gray">Unreliable x100</button>
+</div>
+<div id="log"></div>
+
+<script src="lib/qrcode.js"></script>
+<script src="lib/jsQR.js"></script>
+<script src="net.js"></script>
+<script>
+  // Test hooks for automated tests
+  window.__recv = []; window.__joins = []; window.__leaves = [];
+  var $ = function (id) { return document.getElementById(id); };
+  function log(s) {
+    var d = $('log');
+    d.textContent = new Date().toLocaleTimeString() + '  ' + s + '\n' + d.textContent;
+  }
+  function status() {
+    $('status').textContent = Net.myId === null ? 'Not connected' :
+      (Net.isHost ? 'HOST (Player 1)' : 'GUEST Player ' + (Net.myId + 1)) + ' — peers: [' + Net.peerIds().join(', ') + ']';
+  }
+  Net.onMessage = function (from, msg) {
+    window.__recv.push({ from: from, msg: msg });
+    if (msg.t === 'ping') { Net.send(from, { t: 'pong', ts: msg.ts, rel: msg.rel }, msg.rel); return; }
+    if (msg.t === 'pong') { log('pong from ' + from + ' (' + (msg.rel ? 'reliable' : 'unreliable') + '): ' + Math.round(performance.now() - msg.ts) + ' ms'); return; }
+    if (msg.t === 'flood') return;
+    log('from ' + from + ': ' + JSON.stringify(msg));
+  };
+  Net.onPeerJoin = function (id) { window.__joins.push(id); log('peer joined: ' + id); status(); };
+  Net.onPeerLeave = function (id) { window.__leaves.push(id); log('peer left: ' + id); status(); };
+
+  function add() {
+    Net.hostAddPlayer().then(function (id) { log('added guest ' + id); status(); },
+      function (e) { log('add failed: ' + e.message); });
+  }
+  $('host').onclick = function () { Net.hostStart(); status(); add(); };
+  $('add').onclick = add;
+  $('join').onclick = function () {
+    Net.joinGame().then(function (id) { log('joined as ' + id); status(); },
+      function (e) { log('join failed: ' + e.message); });
+  };
+  $('disc').onclick = function () { Net.disconnect(); status(); log('disconnected'); };
+  $('send').onclick = function () {
+    var msg = { t: 'chat', text: $('text').value, from: Net.myId };
+    if (Net.isHost) Net.broadcast(msg); else Net.send(0, msg);
+    log('me: ' + msg.text);
+  };
+  $('ping').onclick = function () {
+    [true, false].forEach(function (rel) {
+      var msg = { t: 'ping', ts: performance.now(), rel: rel };
+      if (Net.isHost) Net.broadcast(msg, rel); else Net.send(0, msg, rel);
+    });
+  };
+  $('flood').onclick = function () {
+    for (var i = 0; i < 100; i++) {
+      var msg = { t: 'flood', i: i, pad: 'x'.repeat(500) };
+      if (Net.isHost) Net.broadcast(msg, false); else Net.send(0, msg, false);
+    }
+    log('sent 100 unreliable');
+  };
+  status();
+</script>
+</body>
+</html>
