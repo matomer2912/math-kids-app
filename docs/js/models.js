@@ -198,12 +198,12 @@ function buildMerchantModel(theme, mc) {
   bx(stall, 4.4, 0.04, 2.0, 0, 0.03, 1.9, cloth2); bx(stall, 4.0, 0.05, 1.6, 0, 0.04, 1.9, cloth1);
   for (let i = -3; i <= 3; i++) bx(stall, 0.25, 0.06, 0.25, i * 0.55, 0.045, 1.9, cloth2);
   // posts, counter, awning stripes
-  for (const x of [-2.6, 2.6]) { bx(stall, 0.22, 2.9, 0.22, x, 1.45, 0.75, wood); bx(stall, 0.22, 3.3, 0.22, x, 1.65, -0.85, wood); }
+  for (const x of [-2.6, 2.6]) { bx(stall, 0.22, 3.2, 0.22, x, 1.6, 0.1, wood); bx(stall, 0.22, 3.5, 0.22, x, 1.75, -0.85, wood); }
   bx(stall, 5.0, 0.95, 0.75, 0, 0.48, 0.55, wood); bx(stall, 5.1, 0.1, 0.85, 0, 0.98, 0.55, wood2);
   bx(stall, 4.9, 0.5, 0.05, 0, 0.55, 0.94, cloth1); // front cloth
-  const awn = new THREE.Group(); awn.position.set(0, 3.05, -0.05); awn.rotation.x = 0.32; stall.add(awn);
-  for (let i = 0; i < 8; i++) bx(awn, 0.68, 0.08, 2.1, -2.38 + i * 0.68, 0, 0, i % 2 ? cloth1 : cloth2);
-  for (let i = 0; i < 8; i++) bx(awn, 0.68, 0.24, 0.06, -2.38 + i * 0.68, -0.12, 1.06, i % 2 ? cloth2 : cloth1); // scalloped edge
+  const awn = new THREE.Group(); awn.position.set(0, 3.35, -0.5); awn.rotation.x = 0.25; stall.add(awn); // high + short so the camera sees the trader
+  for (let i = 0; i < 8; i++) bx(awn, 0.68, 0.08, 1.4, -2.38 + i * 0.68, 0, 0, i % 2 ? cloth1 : cloth2);
+  for (let i = 0; i < 8; i++) bx(awn, 0.68, 0.24, 0.06, -2.38 + i * 0.68, -0.12, 0.7, i % 2 ? cloth2 : cloth1); // scalloped edge
   // back cloth + shelves with goods
   bx(stall, 5.0, 2.6, 0.08, 0, 1.4, -0.95, cloth1);
   bx(stall, 4.6, 0.08, 0.4, 0, 1.75, -0.75, wood2);
