@@ -56,14 +56,16 @@ const LEGEND_NAMES = {
 };
 
 let itemSeq = Math.floor(R() * 1e6);
-function makeItem(floor, rar, w) {
-  w = w || R.pick(WEAPON_KEYS);
-  const nE = [0, 1, 2, 2][rar] + (rar === 3 && R.chance(0.5) ? 1 : 0);
+// rng (optional): a seeded RNG for reproducible items (merchant stock); defaults to gameplay randomness
+function makeItem(floor, rar, w, rng) {
+  const Q = rng || R;
+  w = w || Q.pick(WEAPON_KEYS);
+  const nE = [0, 1, 2, 2][rar] + (rar === 3 && Q.chance(0.5) ? 1 : 0);
   const e = [];
-  while (e.length < nE) { const k = R.pick(ENCH_KEYS); if (!e.includes(k)) e.push(k); }
+  while (e.length < nE) { const k = Q.pick(ENCH_KEYS); if (!e.includes(k)) e.push(k); }
   let n;
-  if (rar === 3) n = R.pick(LEGEND_NAMES[w]);
-  else n = (e.length ? ENCH[e[0]].adj + ' ' : (rar === 0 ? R.pick(['Old ', 'Rusty ', 'Simple ', '']) : '')) + WEAPONS[w].name;
+  if (rar === 3) n = Q.pick(LEGEND_NAMES[w]);
+  else n = (e.length ? ENCH[e[0]].adj + ' ' : (rar === 0 ? Q.pick(['Old ', 'Rusty ', 'Simple ', '']) : '')) + WEAPONS[w].name;
   return { id: (++itemSeq).toString(36) + R.int(10, 99), w, r: rar, p: Math.max(1, floor | 0), e, n };
 }
 function itemDmg(it) { return WEAPONS[it.w].dmg * RAR[it.r].m * (1 + 0.22 * (it.p - 1)); }
@@ -193,3 +195,46 @@ function worldLoop(floor) { return Math.floor((floor - 1) / (3 * THEMES.length))
 const PLAYER_COLORS = ['#3d8bff', '#ff4d4d', '#3ddc6a', '#ffcc33', '#b366ff', '#ff8a3d'];
 
 const COOLDOWN = { potion: 14, dodge: 1.1 };
+
+// ---------- merchant: permanent hero boosts, potions, hero skins ----------
+// boosts: rank 0..max. cost[rank] = price of the NEXT rank. Effects are applied by the host (hp, pot, dmg)
+// and by the player's own device (roll).
+const BOOSTS = {
+  hp:   { icon: '❤️', name: 'Tough Heart',  desc: 'More max health',        per: 0.08, unit: '% max HP',      max: 5, cost: [150, 300, 500, 800, 1200] },
+  dmg:  { icon: '⚔️', name: 'Warrior Might', desc: 'Hit harder with everything', per: 0.06, unit: '% damage',  max: 5, cost: [200, 400, 650, 1000, 1500] },
+  pot:  { icon: '🧪', name: 'Big Gulp',      desc: 'Heal potion heals more',  per: 0.10, unit: '% potion heal', max: 4, cost: [120, 250, 450, 700] },
+  roll: { icon: '💨', name: 'Quick Feet',    desc: 'Roll comes back faster',  per: 0.15, unit: 's roll cooldown', max: 3, cost: [150, 350, 650] },
+};
+const BOOST_KEYS = Object.keys(BOOSTS);
+function boostRank(b, k) { return Math.max(0, Math.min(BOOSTS[k].max, (b && b[k]) | 0)); }
+function hpBoostMult(b) { return 1 + BOOSTS.hp.per * boostRank(b, 'hp'); }
+function dmgBoostMult(b) { return 1 + BOOSTS.dmg.per * boostRank(b, 'dmg'); }
+function potionHealFrac(b) { return 0.6 + BOOSTS.pot.per * boostRank(b, 'pot'); }
+function rollCooldown(b) { return COOLDOWN.dodge - BOOSTS.roll.per * boostRank(b, 'roll'); }
+
+// battle potions (carried in the Profile, max 3 each). Timed ones are applied by the host for `dur` s.
+const POTIONS = {
+  rage:    { icon: '😡', name: 'Rage Potion',     desc: '+50% damage for 20 seconds',              dur: 20, color: '#ff4a3a', hex: 0xff4a3a, cost: 60 },
+  swift:   { icon: '⚡', name: 'Swiftness Potion', desc: '+30% move & attack speed for 20 seconds', dur: 20, color: '#ffe14a', hex: 0xffe14a, cost: 50 },
+  iron:    { icon: '🛡️', name: 'Iron Skin Potion', desc: 'Take half damage for 20 seconds',         dur: 20, color: '#9ab8d8', hex: 0x9ab8d8, cost: 60 },
+  phoenix: { icon: '🪶', name: 'Phoenix Feather',  desc: 'Works by itself: when you fall, you jump right back up!', dur: 0, color: '#ff9a2a', hex: 0xff9a2a, cost: 150, passive: true },
+};
+const POTION_KEYS = Object.keys(POTIONS);
+const BUFF_KEYS = ['rage', 'swift', 'iron'];   // bit order in the player snapshot flags
+const POTION_MAX = 3;
+
+// cosmetic hero outfits (built in models.js). id '' = classic hero.
+const HERO_SKINS = [
+  { id: '',         icon: '🙂', name: 'Classic Hero', cost: 0,    desc: 'The hero who started it all' },
+  { id: 'explorer', icon: '🤠', name: 'Explorer',     cost: 250,  desc: 'Safari hat and a trusty backpack' },
+  { id: 'ninja',    icon: '🥷', name: 'Ninja',        cost: 400,  desc: 'Silent mask and a flowing headband' },
+  { id: 'pirate',   icon: '🏴‍☠️', name: 'Pirate',       cost: 400,  desc: 'Tricorn hat, eyepatch, arrr!' },
+  { id: 'knight',   icon: '🛡️', name: 'Knight',       cost: 600,  desc: 'Shiny helmet and plate armor' },
+  { id: 'wizard',   icon: '🧙', name: 'Wizard',       cost: 600,  desc: 'Starry pointy hat and robe' },
+  { id: 'pharaoh',  icon: '👑', name: 'Pharaoh',      cost: 900,  desc: 'Royal striped headdress of gold' },
+  { id: 'robot',    icon: '🤖', name: 'Robot',        cost: 900,  desc: 'Beep boop! Glowing visor & antenna' },
+  { id: 'golden',   icon: '🌟', name: 'Golden King',  cost: 2500, desc: 'Solid gold armor and a crown. Legendary!' },
+];
+function heroSkin(id) { return HERO_SKINS.find(s => s.id === id) || HERO_SKINS[0]; }
+// merchant floors: the first floor of every world (right after a boss) + floor 1
+function hasMerchant(floor) { return !isBossFloor(floor) && (floor === 1 || floor % 3 === 1); }

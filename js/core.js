@@ -12,12 +12,19 @@ const Profile = (() => {
     const b = makeItem(1, 0, 'bow'); b.n = 'Hunting Bow';
     p = { name: '', color: PLAYER_COLORS[Math.floor(Math.random() * 3)], lvl: 1, xp: 0, coins: 0, inv: [s, b], eq: 0, best: 1 };
   }
+  // merchant extras (older saves don't have them)
+  if (!p.boosts || typeof p.boosts !== 'object') p.boosts = {};
+  if (!p.pots || typeof p.pots !== 'object') p.pots = {};
+  for (const k of BOOST_KEYS) p.boosts[k] = boostRank(p.boosts, k);
+  for (const k of POTION_KEYS) p.pots[k] = Math.max(0, Math.min(POTION_MAX, p.pots[k] | 0));
+  if (!Array.isArray(p.skins)) p.skins = [];
+  if (typeof p.skin !== 'string' || (p.skin && !p.skins.includes(p.skin))) p.skin = '';
   return p;
 })();
 let saveT = 0;
 function saveProfile() { try { localStorage.setItem('dd_profile', JSON.stringify(Profile)); } catch (e) { } }
 function equipped() { return Profile.inv[Profile.eq] || Profile.inv[0]; }
-function myStats() { return { lvl: Profile.lvl, wpn: equipped(), name: Profile.name || 'Hero', color: Profile.color }; }
+function myStats() { return { lvl: Profile.lvl, wpn: equipped(), name: Profile.name || 'Hero', color: Profile.color, boosts: Profile.boosts, skin: Profile.skin || '', ph: Profile.pots.phoenix > 0 ? 1 : 0 }; }
 
 // ---------- renderer ----------
 const canvas = $('c');
@@ -100,6 +107,11 @@ const SFX = {
   special: () => { noise(0.25, 0.15, 1200, 'bandpass'); tone(300, 0.25, 'sawtooth', 0.06, 300); },
   fanfare: () => [523, 523, 523, 698, 880, 1047].forEach((f, i) => tone(f, 0.22, 'square', 0.07, 0, i * 0.13)),
   down: () => tone(300, 0.6, 'triangle', 0.12, -250),
+  tick: () => tone(880, 0.07, 'square', 0.05),
+  tock: () => { tone(1320, 0.12, 'square', 0.06); tone(1760, 0.18, 'triangle', 0.05, 0, 0.08); },
+  buy: () => { tone(1047, 0.06, 'square', 0.05); tone(1568, 0.1, 'square', 0.05, 0, 0.06); tone(2093, 0.14, 'triangle', 0.05, 0, 0.13); },
+  shake: () => noise(0.12, 0.1, 900, 'bandpass'),
+  drink: () => { tone(400, 0.12, 'sine', 0.08, 300); tone(700, 0.2, 'triangle', 0.06, 500, 0.1); },
 };
 function sfx(name) {
   if (!soundOn || !AC.ctx) return;

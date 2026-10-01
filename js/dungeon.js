@@ -262,6 +262,41 @@ function genDungeon(seed, floor) {
     solids.length = 0;
   }
 
+  // ---- merchant stall (first floor of each world + floor 1): against a wall of the start room ----
+  // Own RNG so the rest of the layout is unchanged. The 4 stall/camel tiles become T_SOLID.
+  let merchant = null;
+  if (hasMerchant(floor) && !boss) {
+    const mr = RNG((seed ^ 0x6d65726b) >>> 0), r0 = rooms[0];
+    // sides in order of preference: back wall (faces the camera), left, right, front
+    const sides = [
+      { dx: 1, dy: 0, nx: 0, ny: 1, rot: 0, line: u => [r0.x + u, r0.y], len: r0.w, wall: (i, j) => [i, j - 1] },
+      { dx: 0, dy: 1, nx: 1, ny: 0, rot: Math.PI / 2, line: v => [r0.x, r0.y + v], len: r0.h, wall: (i, j) => [i - 1, j] },
+      { dx: 0, dy: 1, nx: -1, ny: 0, rot: -Math.PI / 2, line: v => [r0.x + r0.w - 1, r0.y + v], len: r0.h, wall: (i, j) => [i + 1, j] },
+      { dx: 1, dy: 0, nx: 0, ny: -1, rot: Math.PI, line: u => [r0.x + u, r0.y + r0.h - 1], len: r0.w, wall: (i, j) => [i, j + 1] },
+    ];
+    for (const sd of sides) {
+      const cand = [];
+      for (let c = 2; c <= sd.len - 3; c++) {
+        let ok = true;
+        for (let o = -2; o <= 2 && ok; o++) {
+          const [i, j] = sd.line(c + o), k = j * W + i, kf = (j + sd.ny) * W + i + sd.nx, [wi, wj] = sd.wall(i, j);
+          if (!inside(i, j) || g[k] !== T_FLOOR || corr[k] || tt[k] || g[kf] !== T_FLOOR || corr[kf] || tt[kf] || g[wj * W + wi] !== T_WALL || nearKey(i, j, 2)) ok = false;
+        }
+        if (ok) cand.push(c);
+      }
+      if (!cand.length) continue;
+      const c = cand[Math.floor(mr() * cand.length)], camelSide = mr() < 0.5 ? -2 : 2;
+      const tiles = [-1, 0, 1, camelSide].map(o => { const [i, j] = sd.line(c + o); return j * W + i; });
+      const gs = g.slice();
+      for (const k of tiles) g[k] = T_SOLID;
+      if (!connected()) { g.set(gs); continue; }
+      const [ci, cj] = sd.line(c), [ai, aj] = sd.line(c + camelSide);
+      const sx = (ci + 0.5) * TILE, sz = (cj + 0.5) * TILE;
+      merchant = { sx, sz, rot: sd.rot, nx: sd.nx, nz: sd.ny, x: sx + sd.nx * 2.3, z: sz + sd.ny * 2.3, camel: { x: (ai + 0.5) * TILE, z: (aj + 0.5) * TILE }, tiles, v: Math.floor(mr() * 1e6) };
+      break;
+    }
+  }
+
   // deterministic decorations
   const deco = [];
   for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
@@ -281,7 +316,7 @@ function genDungeon(seed, floor) {
   const tc = (cc) => ({ x: (cc.x + 0.5) * TILE, z: (cc.y + 0.5) * TILE });
   return {
     seed, floor, boss, W, H, g, rooms, deco, corr, tt, tq, rid, traps, plates, shrines, solids,
-    start: tc(start), exit: tc(ec), exitRoom,
+    start: tc(start), exit: tc(ec), exitRoom, merchant,
     roomWorld: r => ({ x0: r.x * TILE, z0: r.y * TILE, x1: (r.x + r.w) * TILE, z1: (r.y + r.h) * TILE }),
   };
 }
