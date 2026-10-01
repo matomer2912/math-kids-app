@@ -883,6 +883,21 @@ $('joinBtn').onclick = () => {
   }).catch(() => { G.role = null; });
 };
 $('waitBack').onclick = () => quitToMenu();
+$('shareBtn').onclick = () => {
+  const url = location.href.split('#')[0].split('?')[0];
+  const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+  const n = qr.getModuleCount(), cv = $('shareQR');
+  const size = Math.floor(Math.min(innerWidth * 0.5, innerHeight * 0.62, 420));
+  const cell = Math.max(2, Math.floor(size / (n + 8)));
+  cv.width = cv.height = cell * (n + 8);
+  cv.style.width = cv.style.height = cv.width + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect((c + 4) * cell, (r + 4) * cell, cell, cell);
+  $('shareUrl').textContent = url;
+  $('share').classList.remove('hidden');
+};
+$('shareClose').onclick = () => $('share').classList.add('hidden');
 
 function goFullscreen() {
   try {

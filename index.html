@@ -167,6 +167,19 @@ input[type=text] { width:100%; font:inherit; font-size:18px; font-weight:800; pa
     <button class="big" id="soloBtn">▶ Play Solo</button>
     <button class="big blue" id="hostBtn">👑 Host Co-op (Dad's phone)</button>
     <button class="big green" id="joinBtn">🔗 Join Co-op</button>
+    <button class="big gray" id="shareBtn" style="font-size:16px;padding:12px">📲 Share game link (QR)</button>
+  </div>
+</div>
+
+<div id="share" class="panel hidden">
+  <div class="phead"><span>📲 Scan to get the game</span><span class="sp"></span><button id="shareClose">✕</button></div>
+  <div class="pbody" style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center">
+    <canvas id="shareQR" style="background:#fff;border-radius:12px;image-rendering:pixelated"></canvas>
+    <div style="max-width:320px" class="hint">
+      Open the <b>camera app</b> on the other phone and point it at this code, then tap the link.<br><br>
+      Open it once while there's signal so it keeps working offline.<br><br>
+      <span id="shareUrl" style="font-size:11px;word-break:break-all;opacity:.75;user-select:text;-webkit-user-select:text"></span>
+    </div>
   </div>
 </div>
 
