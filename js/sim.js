@@ -8,6 +8,7 @@ const Sim = (() => {
     players: new Map(), enemies: [], projs: [], loot: [],
     events: [], nextId: 1, boss: null, portalOpen: false, time: 0,
     flow: null, flowT: 0, wipeT: 0, nPlayersAtStart: 1,
+    timers: [], hz: [], waves: [], arenas: [], plateCd: [],
   };
   const nid = () => S.nextId++;
   const ev = (...a) => { S.events.push(a); if (Sim.onEvent) Sim.onEvent(a); };
@@ -1158,6 +1159,7 @@ const Sim = (() => {
 
   return {
     S, addPlayer, removePlayer, setStats, setInput, startFloor, update, snapshot, nearestEnemy,
+    __spawn: spawnEnemy, __dmg: dmgEnemy, // test hooks
     onGrant: null, onExit: null, onWipe: null, onEvent: null,
   };
 })();
