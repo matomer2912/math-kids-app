@@ -1,12 +1,18 @@
-/* net.js - offline LAN co-op networking for the dungeon game.
+/* net.js - co-op networking for the dungeon game.
  *
- * WebRTC DataChannels. Works over a shared phone hotspot (direct LAN, no internet needed)
- * and over separate mobile-data connections (via public STUN/TURN servers when online).
- * Signaling is done by hand with QR codes: host shows offer QR -> guest scans,
- * guest shows answer QR -> host scans.  The QR payload is a compact string,
- * not raw SDP; each side rebuilds a minimal data-channel-only SDP.
+ * WebRTC DataChannels: one RTCPeerConnection per guest with two negotiated channels,
+ * 'r' (reliable, ordered) and 'u' (unreliable: unordered, maxRetransmits 0).
+ * Two ways to connect:
+ *  1. Room code (needs signal at join time). The host registers "desertdungeons-<CODE>-host"
+ *     on the free PeerJS cloud signaling server; guests type the 4-letter code, scan the lobby
+ *     QR, or open the #join=CODE link. PeerJS only relays the SDP/ICE messages; the data path
+ *     is our own RTCPeerConnection (direct over the hotspot LAN, via STUN, or a TURN relay).
+ *  2. Offline QR (no signal needed): host shows offer QR -> guest scans,
+ *     guest shows answer QR -> host scans. The QR payload is a compact string,
+ *     not raw SDP; each side rebuilds a minimal data-channel-only SDP.
  *
- * Needs (globals, loaded before this file): qrcode (qrcode-generator), jsQR (fallback scanner).
+ * Needs (globals, loaded before this file): qrcode (qrcode-generator), jsQR (fallback scanner),
+ * Peer (lib/peerjs.min.js; only used for room codes).
  * Exposes window.Net (see API at the bottom).
  */
 (function () {
@@ -19,6 +25,8 @@
   // Unreachable servers (e.g. no signal in the desert) are simply skipped after the timeout.
   var ICE_SERVERS = [
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    // PeerJS's own free TURN servers (the PeerJS library's defaults)
+    { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
     { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
     { urls: ['turn:freestun.net:3478'], username: 'free', credential: 'free' }
   ];
@@ -26,19 +34,29 @@
   var CONNECT_TIMEOUT_MS = 15000; // host: after scanning the answer
   var GUEST_WAIT_MS = 180000;    // guest: waiting for host to scan its code
   var DISCONNECT_GRACE_MS = 4000;
+  var PEER_TIMEOUT_MS = 10000;   // nothing received for this long -> the connection is dead
+  var KEEPALIVE_MS = 1000;       // send a tiny 'k' on the reliable channel when idle
   var UNRELIABLE_MAX_BUFFER = 64 * 1024;
+  // Room codes
+  var ROOM_PREFIX = 'desertdungeons-';
+  var CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ'; // no I / L / O and no digits: easy to read and type
+  var ROOM_JOIN_MS = 25000;      // guest: one whole join attempt
+  var ROOM_HOST_SESS_MS = 25000; // host: one guest's connection attempt
+  var ROOM_RETRY_MS = 6000;      // host: retry the signaling server while offline
 
   var Net = {
     isHost: false,
     myId: null,
+    roomCode: null,
     onMessage: function () {},
     onPeerJoin: function () {},
-    onPeerLeave: function () {}
+    onPeerLeave: function () {},
+    onRoomStatus: function () {}
   };
 
   var peers = new Map();   // id -> peer (only joined peers)
-  var pairing = null;      // current pairing attempt
-  var debug = { lastQR: null, state: 'idle', log: [] };
+  var pairing = null;      // current pairing attempt (QR host/guest, or room guest)
+  var debug = { lastQR: null, state: 'idle', log: [], sigServer: null };
 
   function dlog() {
     var s = Array.prototype.slice.call(arguments).join(' ');
@@ -188,14 +206,23 @@
   // ------------------------------------------------------------------
   // Peers
   // ------------------------------------------------------------------
-  function makePeer(id) {
-    var pc = new RTCPeerConnection({ iceServers: isOnline() ? ICE_SERVERS : [] });
+  function makePeer(id, forceIce) {
+    var pc = new RTCPeerConnection({ iceServers: forceIce || isOnline() ? ICE_SERVERS : [] });
     var r = pc.createDataChannel('r', { negotiated: true, id: 0, ordered: true });
     var u = pc.createDataChannel('u', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
-    var peer = { id: id, pc: pc, r: r, u: u, joined: false, left: false, dcTimer: null };
+    var now = Date.now();
+    var peer = {
+      id: id, pc: pc, r: r, u: u, joined: false, left: false, dcTimer: null,
+      lastRecv: now, lastSent: now, rx: 0, tx: 0, via: 'qr', did: null
+    };
     var onmsg = function (e) {
+      if (peer.left) return;
+      peer.lastRecv = Date.now();
+      var d = e.data;
+      if (typeof d === 'string') peer.rx += d.length;
+      if (d === 'k') return; // keepalive
       var msg;
-      try { msg = JSON.parse(e.data); } catch (err) { return; }
+      try { msg = JSON.parse(d); } catch (err) { return; }
       safeCall(Net.onMessage, peer.id, msg);
     };
     r.onmessage = onmsg;
@@ -220,6 +247,7 @@
   function closePeer(peer) {
     peer.left = true;
     if (peer.dcTimer) clearTimeout(peer.dcTimer);
+    peer.pc.onicecandidate = null;
     try { peer.r.close(); } catch (e) {}
     try { peer.u.close(); } catch (e) {}
     try { peer.pc.close(); } catch (e) {}
@@ -235,11 +263,14 @@
       safeCall(Net.onPeerLeave, peer.id);
     } else if (pairing && pairing.peer === peer) {
       pairing.peer = null;
+    } else if (peer.sess) {
+      dropSess(peer.sess);
     }
   }
 
   function onPeerOpen(peer) {
     if (peer.left || peer.joined) return;
+    if (peer.sess) { hostSessOpen(peer); return; }
     if (!pairing || pairing.peer !== peer) { closePeer(peer); return; }
     var p = pairing;
     pairing = null;
@@ -248,14 +279,15 @@
     var old = peers.get(peer.id);
     if (old && old !== peer) closePeer(old);
     peers.set(peer.id, peer);
-    hideOverlay();
-    stopCamera();
+    peer.lastRecv = Date.now();
+    if (p.kind !== 'room') { hideOverlay(); stopCamera(); }
     setState('connected');
     if (p.kind === 'host') {
       safeCall(Net.onPeerJoin, peer.id);
       p.resolve(peer.id);
     } else {
       Net.myId = p.id;
+      if (p.tr) { var tr = p.tr; setTimeout(function () { tr.destroy(); }, 3000); }
       p.resolve(p.id);
     }
   }
@@ -272,8 +304,21 @@
     });
   }
 
-  function freeGuestId() {
-    for (var i = 1; i <= MAX_GUESTS; i++) if (!peers.has(i)) return i;
+  // Guest ids 1..3. Ids held by a connected peer, a pending room join or the QR pairing are taken;
+  // ids remembered for another device (so it can rejoin with the same slot) are used last.
+  function idBusy(i, did) {
+    var pe = peers.get(i);
+    if (pe && !(did && pe.did === did)) return true;
+    if (pairing && pairing.kind === 'host' && pairing.id === i) return true;
+    var busy = false;
+    roomSess.forEach(function (s) { if (s.id === i && s.did !== did) busy = true; });
+    return busy;
+  }
+  function freeGuestId(did) {
+    var i, remembered = {};
+    Object.keys(didToId).forEach(function (d) { if (d !== did) remembered[didToId[d]] = 1; });
+    for (i = 1; i <= MAX_GUESTS; i++) if (!idBusy(i, did) && !peers.has(i) && !remembered[i]) return i;
+    for (i = 1; i <= MAX_GUESTS; i++) if (!idBusy(i, did) && !peers.has(i)) return i;
     return 0;
   }
 
@@ -286,6 +331,7 @@
     if (!p) return;
     pairing = null;
     clearTimers(p);
+    if (p.tr) p.tr.destroy();
     if (p.peer) closePeer(p.peer);
     var err = new Error(reason || 'cancelled');
     p.reject(err);
@@ -769,6 +815,380 @@
   }
 
   // ------------------------------------------------------------------
+  // Room codes: signaling transport
+  //   A transport relays small JSON payloads between ids over a signaling server:
+  //   transport = makeTransport(myId, {onOpen(), onMsg(src, payload), onError(type, msg), onClose()})
+  //   transport.send(dstId, payload); transport.destroy()
+  //   Default: PeerJS cloud server (0.peerjs.com). Only the server connection of the PeerJS library
+  //   is used (id registration, heartbeats, errors); our payloads ride in its relayed messages
+  //   (type OFFER, payload.type 'dd', which the PeerJS client itself ignores).
+  //   Test override: ?sig=host:port (self-hosted PeerServer) or Net._debug.makeTransport.
+  // ------------------------------------------------------------------
+  function rnd(n, abc) {
+    abc = abc || 'abcdefghijkmnpqrstuvwxyz23456789';
+    var s = '', a = new Uint32Array(n);
+    try { crypto.getRandomValues(a); } catch (e) { for (var j = 0; j < n; j++) a[j] = Math.floor(Math.random() * 1e9); }
+    for (var i = 0; i < n; i++) s += abc.charAt(a[i] % abc.length);
+    return s;
+  }
+  var memDid = null;
+  function deviceId() {
+    try {
+      var d = localStorage.getItem('dd_did');
+      if (!d) { d = rnd(12); localStorage.setItem('dd_did', d); }
+      return d;
+    } catch (e) { return memDid || (memDid = rnd(12)); }
+  }
+  function normCode(c) {
+    c = String(c || '').toUpperCase().replace(/[^A-Z]/g, '');
+    return c.length === 4 ? c : null;
+  }
+  // Accepts "KQMB", or any URL/text containing join=KQMB (the lobby QR holds the game URL + #join=CODE).
+  function codeFromText(t) {
+    t = String(t || '').trim();
+    var m = /[#?&]join=([A-Za-z]{4})(?![A-Za-z])/.exec(t);
+    if (m) return m[1].toUpperCase();
+    return /^[A-Za-z]{4}$/.test(t) ? t.toUpperCase() : null;
+  }
+  function hostPeerId(code) { return ROOM_PREFIX + code + '-host'; }
+
+  function sigOptions() {
+    var o = { debug: 0, config: { iceServers: ICE_SERVERS } };
+    var s = debug.sigServer;
+    if (!s) { var m = /[?&]sig=([^&#]+)/.exec(location.search || ''); if (m) s = decodeURIComponent(m[1]); }
+    if (s) {
+      var hp = s.split(':');
+      o.host = hp[0]; o.port = +(hp[1] || 9000); o.path = '/'; o.key = 'peerjs';
+      o.secure = location.protocol === 'https:';
+    }
+    return o;
+  }
+
+  function peerjsTransport(myId, h) {
+    var t = { open: false, dead: false, send: function () {}, destroy: function () {} };
+    if (typeof window.Peer !== 'function') {
+      setTimeout(function () { h.onError('no-lib', 'PeerJS library missing'); }, 0);
+      return t;
+    }
+    var pj;
+    try { pj = new window.Peer(myId, sigOptions()); } catch (e) {
+      setTimeout(function () { h.onError('no-lib', String(e)); }, 0);
+      return t;
+    }
+    pj.on('open', function () { if (!t.dead) { t.open = true; h.onOpen(); } });
+    pj.on('error', function (err) { if (!t.dead) h.onError((err && err.type) || 'error', err && err.message); });
+    pj.on('disconnected', function () { if (!t.dead) { t.open = false; if (h.onClose) h.onClose(); } });
+    pj.socket.on('message', function (m) {
+      if (!t.dead && m && m.src && m.payload && m.payload.type === 'dd') h.onMsg(m.src, m.payload);
+    });
+    t.send = function (dst, payload) {
+      if (t.dead) return;
+      payload.type = 'dd';
+      try { pj.socket.send({ type: 'OFFER', dst: dst, payload: payload }); } catch (e) { dlog('sig send failed', e); }
+    };
+    t.destroy = function () {
+      if (t.dead) return;
+      t.dead = true; t.open = false;
+      try { pj.destroy(); } catch (e) {}
+    };
+    return t;
+  }
+  function makeTransport(myId, h) {
+    return (debug.makeTransport || peerjsTransport)(myId, h);
+  }
+
+  function addCand(s, c) {
+    if (!c) return;
+    if (!s.remoteSet) { s.cands.push(c); return; }
+    s.peer.pc.addIceCandidate(c).catch(function (e) { dlog('addIceCandidate failed', e && e.message); });
+  }
+  function flushCands(s) {
+    var list = s.cands; s.cands = [];
+    list.forEach(function (c) { addCand(s, c); });
+  }
+
+  // ------------------------------------------------------------------
+  // Room codes: host side
+  // ------------------------------------------------------------------
+  var room = null;          // {code, tr, status, restored, idTries, retry}
+  var roomSess = new Map(); // sid -> pending guest connection
+  var didToId = {};         // device id -> guest id (rejoin gets the same slot)
+
+  function roomStatus(st) {
+    if (!room) return;
+    room.status = st;
+    dlog('room', room.code, st);
+    safeCall(Net.onRoomStatus, st, room.code);
+  }
+
+  function hostOpenRoom() {
+    if (!Net.isHost) Net.hostStart();
+    if (room) return room.code;
+    var code = null, restored = false;
+    try {
+      var sv = JSON.parse(localStorage.getItem('dd_room') || 'null');
+      if (sv && normCode(sv.c) && Date.now() - sv.t < 3 * 3600 * 1000) { code = sv.c; restored = true; }
+    } catch (e) {}
+    room = { code: code || rnd(4, CODE_ABC), tr: null, status: 'connecting', restored: restored, idTries: 0, retry: null };
+    Net.roomCode = room.code;
+    roomConnect();
+    return room.code;
+  }
+
+  function saveRoomCode() {
+    try { localStorage.setItem('dd_room', JSON.stringify({ c: room.code, t: Date.now() })); } catch (e) {}
+  }
+
+  function roomConnect() {
+    var r = room;
+    if (!r) return;
+    if (r.retry) { clearTimeout(r.retry); r.retry = null; }
+    if (r.tr) r.tr.destroy();
+    roomStatus('connecting');
+    var retryLater = function () {
+      if (room !== r) return;
+      if (r.tr) { r.tr.destroy(); r.tr = null; }
+      roomStatus('offline');
+      if (!r.retry) r.retry = setTimeout(function () { r.retry = null; if (room === r) roomConnect(); }, ROOM_RETRY_MS);
+    };
+    var tr = r.tr = makeTransport(hostPeerId(r.code), {
+      onOpen: function () { if (room === r && r.tr === tr) { r.idTries = 0; saveRoomCode(); roomStatus('open'); } },
+      onMsg: function (src, m) { if (room === r && r.tr === tr) hostSigMsg(src, m); },
+      onError: function (type, msg) {
+        if (room !== r || r.tr !== tr) return;
+        dlog('room signaling error', type, msg);
+        if (type === 'peer-unavailable') return; // a guest went away mid-handshake
+        if (type === 'unavailable-id') {
+          // Code in use: maybe our own previous session that the server hasn't dropped yet.
+          tr.destroy(); r.tr = null;
+          if (r.restored && r.idTries++ < 2) { r.retry = setTimeout(function () { r.retry = null; if (room === r) roomConnect(); }, 4000); return; }
+          r.code = rnd(4, CODE_ABC); r.restored = false; r.idTries = 0;
+          Net.roomCode = r.code;
+          roomConnect();
+          return;
+        }
+        retryLater();
+      },
+      onClose: function () { if (room === r && r.tr === tr) retryLater(); }
+    });
+  }
+
+  function closeRoom() {
+    var r = room;
+    room = null;
+    roomSess.forEach(function (s) { dropSess(s); });
+    if (r) {
+      if (r.retry) clearTimeout(r.retry);
+      if (r.tr) r.tr.destroy();
+    }
+  }
+
+  function dropSess(s) {
+    if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+    if (roomSess.get(s.sid) === s) roomSess.delete(s.sid);
+    if (!s.peer.joined && !s.peer.left) closePeer(s.peer);
+  }
+
+  function hostSigMsg(src, m) {
+    if (!Net.isHost || !room) return;
+    if (m.k === 'join') { hostRoomJoin(src, m); return; }
+    var s = roomSess.get(m.sid);
+    if (!s || s.src !== src) return;
+    if (m.k === 'answer') {
+      s.peer.pc.setRemoteDescription({ type: 'answer', sdp: String(m.sdp) }).then(function () {
+        s.remoteSet = true; flushCands(s);
+      }).catch(function (e) { dlog('room answer failed', e && e.message); dropSess(s); });
+    } else if (m.k === 'cand') addCand(s, m.c);
+  }
+
+  function hostRoomJoin(src, m) {
+    var r = room;
+    var did = String(m.did || '').replace(/[^\w-]/g, '').slice(0, 40) || ('anon-' + src);
+    roomSess.forEach(function (s) { if (s.did === did || s.src === src) dropSess(s); });
+    var prev = didToId[did];
+    var id = prev && !idBusy(prev, did) ? prev : freeGuestId(did);
+    dlog('room join from', src, 'device', did, '-> id', id);
+    if (!id) { r.tr.send(src, { k: 'full' }); return; }
+    var peer = makePeer(id, true);
+    var s = { sid: rnd(8), src: src, did: did, id: id, peer: peer, cands: [], remoteSet: false, timer: null };
+    peer.sess = s; peer.via = 'room'; peer.did = did;
+    roomSess.set(s.sid, s);
+    peer.pc.onicecandidate = function (e) {
+      if (e.candidate && room === r && r.tr) r.tr.send(src, { k: 'cand', sid: s.sid, c: e.candidate.toJSON() });
+    };
+    s.timer = setTimeout(function () { if (!peer.joined) { dlog('room join timed out', id); dropSess(s); } }, ROOM_HOST_SESS_MS);
+    peer.pc.createOffer().then(function (o) { return peer.pc.setLocalDescription(o); }).then(function () {
+      if (roomSess.get(s.sid) !== s || room !== r || !r.tr) return;
+      r.tr.send(src, { k: 'offer', sid: s.sid, id: id, sdp: peer.pc.localDescription.sdp });
+    }).catch(function (e) { dlog('room offer failed', e && e.message); dropSess(s); });
+  }
+
+  function hostSessOpen(peer) {
+    var s = peer.sess;
+    if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+    roomSess.delete(s.sid);
+    peer.sess = null;
+    if (!Net.isHost) { closePeer(peer); return; }
+    var old = peers.get(peer.id);
+    if (old && old !== peer) peerGone(old, 'replaced by rejoin'); // stale connection of the same device
+    peer.joined = true;
+    peer.lastRecv = Date.now();
+    peers.set(peer.id, peer);
+    didToId[s.did] = peer.id;
+    setState('connected');
+    safeCall(Net.onPeerJoin, peer.id);
+  }
+
+  // ------------------------------------------------------------------
+  // Room codes: guest side
+  // ------------------------------------------------------------------
+  function joinRoom(codeIn) {
+    var code = normCode(codeIn);
+    if (!code) return Promise.reject(new Error('badcode'));
+    cancelPairing('replaced');
+    closeRoom();
+    peers.forEach(function (peer) { closePeer(peer); });
+    peers.clear();
+    Net.isHost = false;
+    Net.myId = null;
+    Net.roomCode = code;
+    var hostId = hostPeerId(code);
+    return new Promise(function (resolve, reject) {
+      var p = { kind: 'room', code: code, id: null, peer: null, timer: null, tr: null, sid: null, cands: [], remoteSet: false, resolve: resolve, reject: reject };
+      pairing = p;
+      setState('room-signaling');
+      var fail = function (why) {
+        if (pairing !== p) return;
+        dlog('room join failed:', why);
+        pairing = null;
+        clearTimers(p);
+        if (p.tr) p.tr.destroy();
+        if (p.peer) closePeer(p.peer);
+        setState('error');
+        reject(new Error(why));
+      };
+      p.timer = setTimeout(function () { fail(p.sid ? 'connect' : 'timeout'); }, ROOM_JOIN_MS);
+      var tr = p.tr = makeTransport(ROOM_PREFIX + code + '-' + rnd(8), {
+        onOpen: function () {
+          if (pairing !== p) return;
+          setState('room-asking');
+          tr.send(hostId, { k: 'join', did: deviceId(), v: 1 });
+        },
+        onMsg: function (src, m) {
+          if (pairing !== p || src !== hostId) return;
+          if (m.k === 'full') { fail('full'); return; }
+          if (m.k === 'cand') { if (m.sid === p.sid) addCand(p, m.c); return; }
+          if (m.k !== 'offer' || !(m.id >= 1 && m.id <= MAX_GUESTS)) return;
+          if (p.peer) closePeer(p.peer);
+          p.sid = m.sid; p.id = m.id; p.cands = []; p.remoteSet = false;
+          var peer = p.peer = makePeer(0, true);
+          peer.via = 'room';
+          peer.pc.onicecandidate = function (e) {
+            if (e.candidate && pairing === p && p.peer === peer) tr.send(hostId, { k: 'cand', sid: m.sid, c: e.candidate.toJSON() });
+          };
+          setState('room-connecting');
+          peer.pc.setRemoteDescription({ type: 'offer', sdp: String(m.sdp) }).then(function () {
+            p.remoteSet = true; flushCands(p);
+            return peer.pc.createAnswer();
+          }).then(function (a) { return peer.pc.setLocalDescription(a); }).then(function () {
+            if (pairing === p && p.peer === peer) tr.send(hostId, { k: 'answer', sid: m.sid, sdp: peer.pc.localDescription.sdp });
+          }).catch(function (e) { dlog('room answer error', e && e.message); fail('rtc'); });
+        },
+        onError: function (type, msg) {
+          if (pairing !== p) return;
+          if (type === 'peer-unavailable') fail('noroom');
+          else if (type === 'unavailable-id') fail('retry');
+          else if (!p.sid) fail('nosignal'); // after the offer, the data path may still connect
+        },
+        onClose: function () { if (pairing === p && !p.sid) fail('nosignal'); }
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Keepalive + dead-connection watchdog
+  // ------------------------------------------------------------------
+  setInterval(function () {
+    var now = Date.now();
+    peers.forEach(function (peer) {
+      if (!peer.joined || peer.left) return;
+      if (now - peer.lastRecv > PEER_TIMEOUT_MS) { peerGone(peer, 'timeout'); return; }
+      if (now - peer.lastSent >= KEEPALIVE_MS && peer.r.readyState === 'open') {
+        try { peer.r.send('k'); peer.lastSent = now; peer.tx += 1; } catch (e) {}
+      }
+    });
+  }, 500);
+
+  // ------------------------------------------------------------------
+  // Connection stats (RTT + direct/relay) for the quality badge
+  // ------------------------------------------------------------------
+  function getStats(id) {
+    var peer = Net.isHost ? peers.get(id) : peers.get(0);
+    if (!peer || peer.left || !peer.pc.getStats) return Promise.resolve(null);
+    return peer.pc.getStats().then(function (rep) {
+      var pair = null, transport = null;
+      rep.forEach(function (s) { if (s.type === 'transport' && s.selectedCandidatePairId) transport = s; });
+      if (transport) pair = rep.get(transport.selectedCandidatePairId);
+      if (!pair) rep.forEach(function (s) {
+        if (s.type === 'candidate-pair' && (s.selected || (s.nominated && s.state === 'succeeded'))) pair = pair || s;
+      });
+      var out = { id: peer.id, via: peer.via, rtt: null, relay: false, local: '?', remote: '?', rx: peer.rx, tx: peer.tx, state: peer.pc.connectionState };
+      if (!pair) return out;
+      if (pair.currentRoundTripTime != null) out.rtt = Math.round(pair.currentRoundTripTime * 1000);
+      var lc = rep.get(pair.localCandidateId), rc = rep.get(pair.remoteCandidateId);
+      var desc = function (c) { return c ? (c.candidateType || '?') + '/' + (c.relayProtocol || c.protocol || '?') : '?'; };
+      out.local = desc(lc); out.remote = desc(rc);
+      out.relay = !!((lc && lc.candidateType === 'relay') || (rc && rc.candidateType === 'relay'));
+      return out;
+    }).catch(function () { return null; });
+  }
+
+  // ------------------------------------------------------------------
+  // Generic QR scan (room code / join URL) and info panel, reusing the overlay
+  // ------------------------------------------------------------------
+  function scanCode(title) {
+    cancelPairing('replaced');
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var finish = function (val, err) {
+        if (done) return;
+        done = true;
+        currentScan = null;
+        hideOverlay();
+        stopCamera();
+        if (err) reject(err); else resolve(val);
+      };
+      var handler = function (text) {
+        if (done) return false;
+        var c = codeFromText(text);
+        if (!c) { flashMsg('That\'s not a room code — scan the code on the host\'s lobby screen'); return false; }
+        buzz();
+        finish(c);
+        return true;
+      };
+      currentScan = handler;
+      var cancel = { label: 'Cancel', cls: 'net-cancel', fn: function () { finish(null, new Error('cancelled')); } };
+      var view = { title: title || 'Point your camera at the code on the host\'s phone', media: 'video', buttons: [cancel] };
+      setState('scan-code');
+      render({ title: 'Starting camera…', media: 'spin', buttons: [cancel] });
+      startCamera().then(function () {
+        if (!done && currentScan === handler) render(view);
+      }, function (err) {
+        if (done || currentScan !== handler) return;
+        render({ title: 'Camera problem', msg: cameraErrorText(err), err: true, hint: 'You can type the code instead.', buttons: [cancel] });
+      });
+    });
+  }
+
+  // view: {title, msg, hint, qr, small, buttons:[{label, cls:'net-go'|'net-cancel', fn}]}
+  function showPanel(view) {
+    var v = {};
+    for (var k in view) v[k] = view[k];
+    if (v.qr) v.media = 'qr';
+    render(v);
+  }
+
+  // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
   Net.peerIds = function () {
@@ -787,30 +1207,47 @@
   };
 
   Net.hostAddPlayer = hostAddPlayer;
-  Net.joinGame = joinGame;
+  Net.joinGame = function () { closeRoom(); Net.roomCode = null; return joinGame(); };
+  // Room codes. Host: hostOpenRoom() -> code; status via Net.onRoomStatus(status, code),
+  // status = 'connecting' | 'open' | 'offline'. Guest: joinRoom(code) -> Promise<myId>,
+  // rejects with Error('noroom' | 'full' | 'nosignal' | 'timeout' | 'connect' | 'rtc' | 'badcode' | 'retry').
+  Net.hostOpenRoom = hostOpenRoom;
+  Net.roomStatus = function () { return room ? room.status : null; };
+  Net.joinRoom = joinRoom;
+  Net.codeFromText = codeFromText;
+  Net.deviceId = deviceId;
+  Net.scanCode = scanCode;          // camera scan of the lobby QR -> Promise<code>
+  Net.showPanel = showPanel;        // simple info overlay (title/msg/qr/buttons)
+  Net.hidePanel = function () { if (!pairing) { hideOverlay(); stopCamera(); } };
+  Net.getStats = getStats;          // Promise<{rtt, relay, local, remote, via, rx, tx}|null>
+  Net.peerVia = function (id) { var p = Net.isHost ? peers.get(id) : peers.get(0); return p ? p.via : null; };
 
-  function sendTo(peer, msg, reliable) {
-    if (!peer || peer.left) return false;
-    var ch = reliable === false ? peer.u : peer.r;
+  function chSend(peer, ch, data, reliable) {
     if (!ch || ch.readyState !== 'open') return false;
-    if (reliable === false && ch.bufferedAmount > UNRELIABLE_MAX_BUFFER) return false;
-    try { ch.send(JSON.stringify(msg)); return true; } catch (e) { return false; }
+    if (!reliable && ch.bufferedAmount > UNRELIABLE_MAX_BUFFER) return false;
+    try { ch.send(data); } catch (e) { return false; }
+    peer.lastSent = Date.now();
+    peer.tx += data.length;
+    return true;
+  }
+  function sendTo(peer, data, reliable) {
+    if (!peer || peer.left || !peer.joined) return false;
+    return chSend(peer, reliable ? peer.r : peer.u, data, reliable);
   }
 
   Net.send = function (toId, msg, reliable) {
     var peer = Net.isHost ? peers.get(toId) : peers.get(0);
-    return sendTo(peer, msg, reliable !== false);
+    return sendTo(peer, JSON.stringify(msg), reliable !== false);
+  };
+  // Same as send() for an already JSON-encoded string (lets the caller measure its size).
+  Net.sendRaw = function (toId, str, reliable) {
+    var peer = Net.isHost ? peers.get(toId) : peers.get(0);
+    return sendTo(peer, str, reliable !== false);
   };
 
   Net.broadcast = function (msg, reliable) {
     var data = JSON.stringify(msg), ok = 0;
-    peers.forEach(function (peer) {
-      if (peer.left) return;
-      var ch = reliable === false ? peer.u : peer.r;
-      if (!ch || ch.readyState !== 'open') return;
-      if (reliable === false && ch.bufferedAmount > UNRELIABLE_MAX_BUFFER) return;
-      try { ch.send(data); ok++; } catch (e) {}
-    });
+    peers.forEach(function (peer) { if (sendTo(peer, data, reliable !== false)) ok++; });
     return ok;
   };
 
@@ -822,12 +1259,14 @@
 
   Net.disconnect = function () {
     cancelPairing('disconnected');
+    closeRoom();
     hideOverlay();
     stopCamera();
     peers.forEach(function (peer) { closePeer(peer); });
     peers.clear();
     Net.isHost = false;
     Net.myId = null;
+    Net.roomCode = null;
     setState('idle');
   };
 
@@ -843,6 +1282,20 @@
   debug.buildSdp = buildSdp;
   debug.parseSdp = parseSdp;
   debug.peers = peers;
+  debug.roomSess = roomSess;
+  debug.didToId = didToId;
+  debug.room = function () { return room; };
+  // Test helper: lose the connection to the host without telling it (like driving into a tunnel).
+  debug.simulateDrop = function () {
+    var peer = peers.get(0);
+    if (!peer || Net.isHost) return false;
+    peer.left = true;
+    peer.r.onmessage = peer.u.onmessage = null;
+    peers.delete(0);
+    Net.myId = null;
+    safeCall(Net.onPeerLeave, 0);
+    return true;
+  };
   Net._debug = debug;
 
   window.Net = Net;
