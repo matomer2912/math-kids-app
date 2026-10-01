@@ -331,30 +331,163 @@ function tileOf(map, x, z) { return Math.floor(z / TILE) * map.W + Math.floor(x 
 
 // ---------- level mesh ----------
 const _m4 = new THREE.Matrix4(), _col = new THREE.Color(), _q = new THREE.Quaternion(), _v3 = new THREE.Vector3(), _s3 = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
-// collects lots of boxes and turns them into one InstancedMesh (one draw call)
-function BoxBatch(mat) {
+// Collects lots of boxes and turns them into InstancedMeshes, one per 10x10-tile chunk (and per
+// flat/tall split when opt.shadow is set). Each chunk gets a cloned box geometry carrying the chunk's
+// bounding sphere, so both the camera and the shadow pass cull whole chunks (r149 culls instanced
+// meshes by geometry bounds only). Flat pieces (floor tiles, carpets) only receive shadows; tall ones
+// (walls, statues, props) cast and receive.
+const CHUNK = 20;
+function BoxBatch(mat, opt) {
   const list = [];
+  const shadow = !!(opt && opt.shadow);
   return {
     list,
     add(color, sx, sy, sz, x, y, z, ry, vary) { list.push([color, sx, sy, sz, x, y, z, ry || 0, vary || 0]); },
     build(grp, rng) {
       if (!list.length) return null;
-      const m = new THREE.InstancedMesh(BOXG, mat, list.length);
-      list.forEach((b, n) => {
-        _q.setFromAxisAngle(_up, b[7]); _s3.set(b[1], b[2], b[3]); _v3.set(b[4], b[5], b[6]);
-        _m4.compose(_v3, _q, _s3); m.setMatrixAt(n, _m4);
-        _col.setHex(b[0]); if (b[8] && rng) _col.offsetHSL(0, 0, (rng() - 0.5) * b[8]);
-        m.setColorAt(n, _col);
-      });
-      m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
-      m.frustumCulled = false;
-      grp.add(m);
-      return m;
+      const groups = new Map();
+      for (const b of list) {
+        const flat = shadow && b[5] + b[2] / 2 <= 0.36;
+        const key = Math.floor(b[4] / CHUNK) * 4096 + Math.floor(b[6] / CHUNK) + (flat ? 0.5 : 0);
+        let g = groups.get(key); if (!g) groups.set(key, g = { flat, list: [] });
+        g.list.push(b);
+      }
+      const out = [];
+      for (const g of groups.values()) {
+        const geo = BOXG.clone();
+        const m = new THREE.InstancedMesh(geo, mat, g.list.length);
+        let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+        g.list.forEach((b, n) => {
+          _q.setFromAxisAngle(_up, b[7]); _s3.set(b[1], b[2], b[3]); _v3.set(b[4], b[5], b[6]);
+          _m4.compose(_v3, _q, _s3); m.setMatrixAt(n, _m4);
+          _col.setHex(b[0]); if (b[8] && rng) _col.offsetHSL(0, 0, (rng() - 0.5) * b[8]);
+          m.setColorAt(n, _col);
+          const r = 0.5 * Math.hypot(b[1], b[2], b[3]);
+          x0 = Math.min(x0, b[4] - r); x1 = Math.max(x1, b[4] + r); y0 = Math.min(y0, b[5] - r); y1 = Math.max(y1, b[5] + r); z0 = Math.min(z0, b[6] - r); z1 = Math.max(z1, b[6] + r);
+        });
+        geo.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), 0.5 * Math.hypot(x1 - x0, y1 - y0, z1 - z0));
+        m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        if (shadow) { m.receiveShadow = true; m.castShadow = !g.flat; }
+        grp.add(m); out.push(m);
+      }
+      return out;
     },
   };
 }
-const shade = (hex, k) => new THREE.Color(hex).multiplyScalar(k).getHex();
-const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t).getHex();
+// colour helpers work on the sRGB hex values (same look as before the linear colour pipeline)
+const shade = (hex, k) => { const c = n => Math.min(255, Math.round(((hex >> n) & 255) * k)); return (c(16) << 16) | (c(8) << 8) | c(0); };
+const mix = (a, b, t) => { const c = n => Math.round(((a >> n) & 255) * (1 - t) + ((b >> n) & 255) * t); return (c(16) << 16) | (c(8) << 8) | c(0); };
+
+// ---------- fake lighting: additive glow decals (light pools on floors/walls, halos) ----------
+// One InstancedMesh of quads for the whole level, radial falloff computed in the shader (no texture),
+// per-instance colour + flicker phase, faded out with distance like fog. Costs one draw call.
+const GLOW_PLANE = new THREE.PlaneGeometry(1, 1); // template only (each level clones it)
+function makeGlowMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uGain: { value: 1 }, uFogN: { value: 24 }, uFogF: { value: 50 } },
+    vertexShader: `uniform float uTime, uFogN, uFogF; attribute vec2 aGlow; varying vec2 vUv; varying vec3 vCol; varying float vA;
+      void main() {
+        vUv = uv; vCol = vec3(1.0);
+        #ifdef USE_INSTANCING_COLOR
+        vCol = instanceColor;
+        #endif
+        vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        float f = 1.0 + aGlow.y * (0.6 * sin(uTime * 9.0 + aGlow.x) + 0.4 * sin(uTime * 14.3 + aGlow.x * 1.7));
+        vA = f * (1.0 - smoothstep(uFogN, uFogF, -mv.z));
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float uGain; varying vec2 vUv; varying vec3 vCol; varying float vA;
+      void main() {
+        vec2 d = vUv - 0.5; float a = max(0.0, 1.0 - 4.0 * dot(d, d)); a *= a;
+        gl_FragColor = vec4(linearToOutputTexel(vec4(vCol, 1.0)).rgb * (a * vA * uGain), 1.0);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+  });
+}
+// kind: 0 floor pool, 1 wall glow (faces +z), 2 camera-facing halo
+function buildGlows(grp, list) {
+  if (!list.length) return null;
+  const ph = new Float32Array(list.length * 2);
+  const geo = GLOW_PLANE.clone();
+  geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(ph, 2)); // per-instance flicker phase + amount
+  const m = new THREE.InstancedMesh(geo, makeGlowMaterial(), list.length);
+  const camQ = typeof camera !== 'undefined' ? camera.quaternion : new THREE.Quaternion();
+  const flatQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2), noQ = new THREE.Quaternion();
+  list.forEach((g, n) => {
+    _v3.set(g.x, g.y, g.z); _s3.set(g.sx, g.sy || g.sx, 1);
+    _m4.compose(_v3, g.k === 0 ? flatQ : g.k === 1 ? noQ : camQ, _s3); m.setMatrixAt(n, _m4);
+    _col.setHex(g.c).multiplyScalar(g.i); m.setColorAt(n, _col);
+    ph[n * 2] = g.ph; ph[n * 2 + 1] = g.fl;
+  });
+  m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  m.frustumCulled = false; m.renderOrder = 2;
+  grp.add(m);
+  return m;
+}
+
+// ---------- ambient particles (one THREE.Points per level, wraps around the hero in the shader) ----------
+const AMB = {
+  dust:  { c: 0xffe2a0, n: 1,   s: 0.16, v: [0.25, 0.08, 0.1],  sw: 0.5, add: 1, a: 0.55, y: [0.2, 5] },
+  wisp:  { c: 0xb8a8ff, n: 0.8, s: 0.22, v: [0.1, 0.18, 0.05],  sw: 0.6, add: 1, a: 0.45, y: [0.2, 4] },
+  leaf:  { c: 0x7ad04a, n: 0.6, s: 0.22, v: [0.5, -0.7, 0.2],   sw: 1.2, add: 0, a: 0.9,  y: [0, 7], sq: 1 },
+  ember: { c: 0xff7a1a, n: 1,   s: 0.14, v: [0.1, 1.1, -0.15],  sw: 0.6, add: 1, a: 0.9,  y: [0, 6] },
+  snow:  { c: 0xffffff, n: 1.1, s: 0.15, v: [0.3, -1.0, 0.15],  sw: 0.7, add: 0, a: 0.85, y: [0, 8] },
+  cloud: { c: 0xffffff, n: 0.3, s: 2.6,  v: [0.6, 0.0, 0.1],    sw: 0.2, add: 0, a: 0.16, y: [-2.5, 1.5] },
+  spore: { c: 0x9affd8, n: 1,   s: 0.16, v: [0.05, 0.35, 0.05], sw: 0.8, add: 1, a: 0.8,  y: [0.2, 5], c2: 0xe07aff },
+  mist:  { c: 0xbfefff, n: 0.8, s: 0.18, v: [0.4, 0.12, 0.0],   sw: 0.5, add: 1, a: 0.4,  y: [0.2, 4] },
+};
+const AMB_MAX = 140, AMB_BOX = [44, 0, 32];
+function buildAmbient(grp, theme) {
+  const A = AMB[(theme.gfx && theme.gfx.amb) || 'dust'] || AMB.dust;
+  const n = AMB_MAX, pos = new Float32Array(n * 3), rnd = new Float32Array(n * 2);
+  const r = RNG(1234567);
+  for (let i = 0; i < n; i++) {
+    pos[i * 3] = r() * AMB_BOX[0]; pos[i * 3 + 1] = A.y[0] + r() * (A.y[1] - A.y[0]); pos[i * 3 + 2] = r() * AMB_BOX[2];
+    rnd[i * 2] = r() * 6.283; rnd[i * 2 + 1] = r();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 2));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+  const c1 = new THREE.Color(A.c), c2 = new THREE.Color(A.c2 || A.c);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uScale: { value: 400 }, uFogF: { value: 50 },
+      uVel: { value: new THREE.Vector3().fromArray(A.v) }, uSize: { value: A.s * A.n }, uSway: { value: A.sw }, uA: { value: A.a },
+      uC1: { value: c1 }, uC2: { value: c2 }, uYr: { value: new THREE.Vector2(A.y[0], A.y[1] - A.y[0]) } },
+    vertexShader: `uniform float uTime, uScale, uSize, uSway, uFogF; uniform vec3 uCenter, uVel; uniform vec2 uYr; attribute vec2 aRnd; varying float vA; varying float vMix;
+      void main() {
+        vec3 box = vec3(${AMB_BOX[0].toFixed(1)}, uYr.y, ${AMB_BOX[2].toFixed(1)});
+        vec3 p = position + uVel * uTime * (0.6 + 0.8 * aRnd.y);
+        p.x += uSway * sin(uTime * (0.7 + aRnd.y) + aRnd.x);
+        p.z += uSway * 0.6 * cos(uTime * (0.5 + aRnd.y * 0.7) + aRnd.x * 1.3);
+        vec2 o = uCenter.xz - box.xz * 0.5;
+        p.x = mod(p.x - o.x, box.x) + o.x;
+        p.z = mod(p.z - o.y, box.z) + o.y;
+        p.y = mod(p.y - uYr.x, uYr.y) + uYr.x;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        float tw = 0.65 + 0.35 * sin(uTime * 2.3 + aRnd.x * 3.0);
+        vec3 rel = (p - uCenter) / (box * 0.5);
+        float edge = 1.0 - smoothstep(0.7, 1.0, max(abs(rel.x), abs(rel.z)));
+        vA = tw * edge * (1.0 - smoothstep(uFogF * 0.7, uFogF, -mv.z));
+        vMix = aRnd.y;
+        gl_PointSize = uSize * uScale / -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float uA; uniform vec3 uC1, uC2; varying float vA; varying float vMix;
+      void main() {
+        vec2 d = gl_PointCoord - 0.5;
+        ${A.sq ? 'float a = step(abs(d.x) + abs(d.y), 0.5);' : 'float a = max(0.0, 1.0 - 4.0 * dot(d, d)); a *= a;'}
+        vec3 c = mix(uC1, uC2, step(0.5, vMix));
+        gl_FragColor = vec4(linearToOutputTexel(vec4(c, 1.0)).rgb, a * vA * uA);
+        ${A.add ? 'gl_FragColor.rgb *= gl_FragColor.a; gl_FragColor.a = 1.0;' : ''}
+      }`,
+    transparent: true, depthWrite: false, blending: A.add ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false; pts.renderOrder = 3;
+  grp.add(pts);
+  return pts;
+}
 
 function buildLevel(map, theme) {
   const grp = new THREE.Group();
