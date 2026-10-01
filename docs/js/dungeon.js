@@ -617,7 +617,7 @@ function buildLevel(map, theme) {
     if (theme.pattern === 'marble' && (i % 4 === 0 && j % 4 === 0)) L.add(0xffc72c, 0.4, 0.02, 0.4, x, 0.01, z, 0.785);
     if (theme.pattern === 'ice' && hash(i, j + 9) < 0.05) L.add(0xffffff, 0.9, 0.02, 0.05, x, 0.01, z, hash(i + 1, j) * 3);
     // puddles
-    if ((deco === 'jungle' || deco === 'crypt' || deco === 'pirate') && !tt[k] && v === T_FLOOR && blob(i + 11, j + 5, 2) > 0.8 && hash(i, j + 1) < 0.6) A.add(deco === 'jungle' ? 0x3a8a9a : 0x5a7a9a, 1.7, 0.02, 1.5, x, 0.02, z, hash(i, j) * 0.5);
+    if ((deco === 'jungle' || deco === 'crypt' || deco === 'pirate') && !tt[k] && v === T_FLOOR && blob(i + 11, j + 5, 2) > 0.8 && hash(i, j + 1) < 0.6) { const pc = LK.puddle || (deco === 'jungle' ? 0x3a8a9a : 0x5a7a9a); A.add(pc, 1.7, 0.02, 1.5, x, 0.02, z, hash(i, j) * 0.5); A.add(pc, 0.9, 0.025, 1.1, x + (hash(i + 1, j) - 0.5) * 1.2, 0.021, z + (hash(i, j + 1) - 0.5) * 1.0, hash(j, i) * 2); }
     // carpets / runners down the middle of corridors
     if (kind === 'corr' && map.corr[k] && walk(i - 1, j) && walk(i + 1, j) && walk(i, j - 1) && walk(i, j + 1) && !tt[k]) {
       const hz = map.corr[k - 1] && map.corr[k + 1] && !(map.corr[k - W] && map.corr[k + W] && map.corr[k - W - 1] === 0);

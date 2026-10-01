@@ -184,7 +184,7 @@ function applyThemeLighting(T) {
   if (typeof LOOK_U !== 'undefined') { // look.js shared uniforms (level materials + characters)
     const LK = typeof lookOf === 'function' ? lookOf(T) : {};
     LOOK_U.uLkMist.value.set(L.mist[0] * (S ? S.mist : 1), L.mist[1], L.mist[2], 0); LOOK_U.uLkMistC.value.setHex(L.mist[3]);
-    LOOK_U.uLkCookie.value.set(L.dapple * (S ? 0.7 : 1), 0.055, 0.6, 0);
+    LOOK_U.uLkCookie.value.set(L.dapple * (S ? 0.7 : 1), L.dappleScale || 0.055, 0.6, 0);
     LOOK_U.uLkAO.value.set((LK.ao || 0.5) * (S ? 0.75 : 1), LK.aoR || 0.42, LK.side || 0.86, LK.base || 0.62);
     LOOK_U.uLkRim.value.set(L.rim[1] * (S ? S.rim : 1), L.rim[2], 0, 0); LOOK_U.uLkRimC.value.setHex(L.rim[0]);
   }
