@@ -15,11 +15,9 @@ function loadFloor(floor, seed, sx, sz) {
   scene.add(G.level);
   // merchant stall (static scenery, deterministic from the seed so every device has it)
   G.merchant = G.map.merchant ? buildMerchantModel(G.theme, G.map.merchant) : null;
-  if (G.merchant) G.level.add(G.merchant);
+  if (G.merchant) { if (typeof prepModel === 'function') prepModel(G.merchant); G.level.add(G.merchant); }
   shopFloorReset();
-  scene.background = new THREE.Color(G.theme.voidc);
-  scene.fog = new THREE.Fog(G.theme.voidc, 20, 40);
-  hemi.color.setHex(G.theme.hemi); hemi.groundColor.setHex(G.theme.ground);
+  applyThemeLighting(G.theme); // background, fog, lights, exposure, vignette (core.js)
   clearVisuals(); clearFx();
   netFloorReset();
   gpuCollect();
@@ -667,7 +665,7 @@ function updateBadge() {
       lines.push('snapshots: ' + (d.recv / sec).toFixed(1) + '/s · avg ' + Math.round(d.recvBytes / Math.max(1, d.recv)) + ' B · max ' + netStats.recvMax + ' B');
       lines.push('delay ' + Math.round(snapSync.delay) + ' ms · jitter p90 ' + Math.round(snapSync.p90) + ' ms · extrapolating ' + Math.round(100 * d.extrapT / sec) + '%');
     }
-    lines.push('frame ' + perfMon.avg.toFixed(1) + ' ms · pixel ratio ' + renderer.getPixelRatio().toFixed(2) + (lowPower ? ' · battery saver' : ''));
+    lines.push('frame ' + perfMon.avg.toFixed(1) + ' ms · pixel ratio ' + renderer.getPixelRatio().toFixed(2) + ' · gfx ' + GFX.q + (lowPower ? ' · battery saver' : ''));
     netInfo.textContent = lines.join('\n');
   }, () => { badgeBusy = false; });
 }
@@ -838,7 +836,7 @@ function myInputMsg() {
 }
 
 // ---------- performance: automatic quality step-down ----------
-// If frames stay slow (> 24 ms average over 4 s), lower the pixel ratio (1.25 -> 1.0 -> 0.85).
+// If frames stay slow (> 22 ms average over 4 s), lower the graphics tier, then the pixel ratio.
 const perfMon = { acc: 0, n: 0, t: 0, avg: 0, last: 0 };
 function perfSample(now) {
   const d = now - perfMon.last; perfMon.last = now;
@@ -846,10 +844,7 @@ function perfSample(now) {
   perfMon.acc += d; perfMon.n++; perfMon.t += d;
   if (perfMon.t < 4000) return;
   perfMon.avg = perfMon.acc / perfMon.n;
-  if (!lowPower && perfMon.avg > 24 && prCap > 0.85) {
-    prCap = prCap > 1 ? 1 : 0.85;
-    applyPR(); resize();
-  }
+  gfxPerf(perfMon.avg); // core.js: steps the graphics tier down (Auto), then the pixel ratio
   perfMon.acc = perfMon.n = perfMon.t = 0;
 }
 
