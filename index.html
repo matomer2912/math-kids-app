@@ -487,7 +487,8 @@ input::placeholder { color:#8a7656; }
 .stab:active { transform:translateY(2px); }
 #shopList { padding:12px 10px 14px; }
 .sgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(92px,1fr)); gap:14px 9px; }
-.sgrid .it { height:104px; }
+.sgrid .it { height:106px; padding-bottom:13px; }
+.sgrid .it .ico { margin-top:10px; }
 .price { position:absolute; left:50%; bottom:-10px; transform:translateX(-50%); z-index:2; padding:1px 7px; border-radius:7px; background:#1b1206; border:1.5px solid var(--gold);
   font-family:var(--fd); font-size:13px; line-height:16px; letter-spacing:.3px; color:var(--gold); white-space:nowrap; text-shadow:var(--ol-s); }
 .price.no { color:#ff9a8a; border-color:#d8503a; }
@@ -509,7 +510,7 @@ input::placeholder { color:#8a7656; }
 .pips.big i { width:20px; height:20px; border-radius:5px; }
 .pips .rk { margin-left:8px; font-family:var(--fd); font-size:15px; color:var(--ink2); text-shadow:var(--ol-s); }
 .shint { display:flex; align-items:center; gap:8px; padding:6px 10px 8px; border-top:3px solid rgba(0,0,0,.35); min-height:46px; }
-.shint .tip { flex:1; font-size:12px; font-weight:800; line-height:1.25; color:var(--ink2); text-shadow:var(--ol-s); }
+.shint .tip { flex:1; min-width:0; font-size:12px; font-weight:800; line-height:1.25; color:var(--ink2); text-shadow:var(--ol-s); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .shint .tip b { color:var(--up); }
 .shint .big { flex:0 0 auto; font-size:14px; padding:6px 10px 7px; }
 .shint .big small { font-size:10px; }
@@ -543,6 +544,7 @@ input::placeholder { color:#8a7656; }
 .skdet { flex-direction:row; align-items:center; gap:12px; }
 .skprev { flex:0 0 auto; width:120px; height:140px; border-radius:12px; background:radial-gradient(circle at 50% 70%,#6a4a2a,#1b1206 75%); border:2px solid var(--trim); box-shadow:inset 0 -14px 0 rgba(0,0,0,.25); }
 .skdet .own { margin-top:8px !important; color:var(--up) !important; }
+#shop .chd .n { overflow-wrap:break-word; }
 #shopToast { position:absolute; left:50%; bottom:74px; transform:translateX(-50%); z-index:6; max-width:80%; padding:7px 14px; border-radius:10px; pointer-events:none;
   background:linear-gradient(180deg,rgba(60,42,24,.97),rgba(30,20,10,.97)); border:2px solid var(--edge); box-shadow:inset 0 0 0 2px var(--gold),0 5px 0 rgba(0,0,0,.4); font-weight:800; font-size:15px; text-shadow:var(--ol-s); white-space:nowrap; }
 #shopToast b { color:var(--gold); }
@@ -569,8 +571,10 @@ input::placeholder { color:#8a7656; }
 .cfx-sub b { font-family:var(--fd); font-weight:400; font-size:17px; color:#fff; }
 .cfx-acts { display:flex; gap:10px; margin-top:8px; }
 .cfx-acts .big { min-width:110px; }
-@media (max-width:860px) { .stab { min-width:44px; padding:3px 4px 2px; } .stab .tl { font-size:10px; } #shop .pt2 { display:none; } }
-@media (max-height:380px) { .stab { height:42px; } .stab .ti { font-size:18px; } .sgrid .it, .sitem { height:96px; } .sitem .ico { font-size:30px; } .skprev { width:104px; height:121px; } #portalCd { top:calc(16% + var(--sat)); } }
+@media (max-width:860px) { .stab { min-width:44px; padding:3px 4px 2px; } .stab .tl { font-size:10px; } #shop .pt2 { display:none; }
+  .sgrid { grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:14px 7px; } .shint .tip { font-size:11px; } }
+@media (max-height:380px) { .stab { height:42px; } .stab .ti { font-size:18px; } .sgrid .it, .sitem { height:96px; } .sitem .ico { font-size:30px; } .sgrid .it .ico { margin-top:6px; }
+  .shint { min-height:40px; padding:4px 10px 6px; } #shop .cgrid { gap:2px 6px; } #shop .cval .v { font-size:14px; } #shop .cpow b { font-size:22px; } .sdet { gap:7px; } .bigico { width:54px; height:54px; font-size:34px; } .skprev { width:104px; height:121px; } #portalCd { top:calc(16% + var(--sat)); } }
 @media (max-width:640px) { #shop .ibody { flex-direction:column; } #shop .icmp { flex:0 0 auto; max-width:none; } }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; } }

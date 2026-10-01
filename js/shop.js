@@ -266,7 +266,13 @@ function rerollEnchants(it) {
 }
 function tabEnchant(list, det, acts) {
   const cand = Profile.inv.filter(it => it.r >= 1).sort((a, b) => itemPower(b) - itemPower(a));
-  if (!cand.length) { list.innerHTML = '<div class="empty">You need a Rare or better weapon to enchant. Find one, or buy one!</div>'; det.innerHTML = ''; return; }
+  if (!cand.length) {
+    list.innerHTML = '<div class="empty">You need a <b style="color:var(--r1)">Rare</b> or better weapon to enchant.<br>Find one in a chest — or buy one!</div>';
+    det.innerHTML = `<div class="sdet"><div class="shd"><div class="bigico" style="--rc:${RAR[2].c}">✨</div><div class="t"><b>Enchanting</b><span>Gives a weapon brand new magic: fire, ice, lightning, vampire, explosions…</span></div></div>
+      <div class="desc">${ENCH_KEYS.map(k => ENCH[k].icon + ' ' + ENCH[k].desc).join('<br>')}</div></div>`;
+    mkBtn(acts, 'blue main', '⚔️ SEE WEAPONS<small>Rare, Epic & Legendary for sale</small>', () => { shop.tab = 'weapons'; shop.sel = 0; renderShop(); });
+    return;
+  }
   if (!shop.encSel || !cand.includes(shop.encSel)) shop.encSel = cand.includes(equipped()) ? equipped() : cand[0];
   const g = grid(list), cur = equipped();
   for (const it of cand) {
