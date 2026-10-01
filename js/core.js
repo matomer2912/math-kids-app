@@ -24,7 +24,10 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 let lowPower = localStorage.getItem('dd_low') === '1';
 let soundOn = localStorage.getItem('dd_snd') !== '0';
-function applyPR() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? 1 : 1.6)); }
+// Pixel ratio: capped at 1.25 (sharp enough on phones, much cheaper than 2-3x); the main loop
+// steps prCap down automatically if frames are slow. Battery saver: 1.0 and a 30 fps cap.
+let prCap = 1.25;
+function applyPR() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPower ? Math.min(1, prCap) : prCap)); }
 applyPR();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c130a);
