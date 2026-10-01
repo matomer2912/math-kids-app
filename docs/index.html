@@ -270,9 +270,18 @@ input::placeholder { color:#8a7656; }
 .plist .pl .sw { width:26px; height:26px; border-radius:6px; }
 /* short landscape phones: any tall .screen > .col flows into two columns instead of scrolling */
 @media (orientation:landscape) and (max-height:520px) {
-  .screen > .col { flex-wrap:wrap; align-content:center; column-gap:18px; width:min(760px,100%); max-width:none !important; max-height:calc(100vh - 24px - var(--sat) - var(--sab)); }
-  .screen > .col > * { width:min(370px,calc(50% - 9px)); }
-  .screen > .col > .title h1 { font-size:clamp(28px,5vw,40px) !important; }
+  /* single-column screens flow into two columns on short phones */
+  .screen > .col:only-child { flex-wrap:wrap; align-content:center; column-gap:18px; width:min(760px,100%); max-width:none !important; max-height:calc(100vh - 24px - var(--sat) - var(--sab)); }
+  .screen > .col:only-child > * { width:min(370px,calc(50% - 9px)); }
+  .screen > .col > .title h1 { font-size:clamp(24px,4.2vw,36px) !important; white-space:nowrap; }
+  /* two-column screens (lobby, join): keep both columns on screen and compact */
+  #lobby, #join { gap:3vw; flex-wrap:nowrap; align-items:center; }
+  #lobby > .col, #join > .col { min-width:0; gap:8px; }
+  #lobby .roomcode { font-size:clamp(36px,10vh,56px) !important; letter-spacing:6px !important; margin:2px 0 4px !important; }
+  #lobby .roomqr { width:min(30vh,140px) !important; height:min(30vh,140px) !important; }
+  #lobby .hint, #join .hint { font-size:13px; line-height:1.3; }
+  #lobby .big, #join .big { padding:10px 12px; font-size:18px; }
+  #roomStatus { font-size:12px !important; }
 }
 
 /* title menu */
@@ -505,24 +514,48 @@ input::placeholder { color:#8a7656; }
 </div>
 
 <div id="lobby" class="screen hidden">
-  <div class="col" style="max-width:520px">
-    <div class="title"><h1 style="font-size:40px">CO-OP LOBBY</h1></div>
-    <div class="card hint">
-      📶 Best: kids join your phone's <b>Wi-Fi hotspot</b> (fastest, works with no signal).<br>
-      📱 Mobile data works too, while there's signal.<br>
-      👉 Kids tap <b>Join Co-op</b>, you tap <b>Add Player</b>, then swap QR codes
+  <div class="col" style="flex:1.3 1 0;max-width:460px;text-align:center">
+    <div class="title"><h1 style="font-size:34px">CO-OP LOBBY</h1></div>
+    <div class="card" id="roomCard" style="display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap">
+      <div>
+        <div class="hint">Kids: tap <b>Join Co-op</b><br>and type this code</div>
+        <div id="roomCode" class="roomcode">····</div>
+        <div class="hint">or scan the QR<br>with the camera app</div>
+      </div>
+      <canvas id="roomQR" class="roomqr"></canvas>
     </div>
+    <div id="roomStatus" class="hint"></div>
+  </div>
+  <div class="col" style="flex:1 1 0;max-width:420px">
     <div class="card plist" id="lobbyList"></div>
-    <button class="big blue" id="addPlayerBtn">➕ Add Player</button>
     <button class="big green" id="startCoopBtn">▶ Start Adventure!</button>
+    <button class="big blue" id="addPlayerBtn" style="font-size:16px;padding:12px">📷 No signal? Add player with QR</button>
+    <div class="hint">📶 Fastest: everyone on your <b>hotspot</b>. The code needs signal to connect; the QR button works without.</div>
     <button class="big gray" id="lobbyBack">Back</button>
+  </div>
+</div>
+
+<div id="join" class="screen hidden">
+  <div class="col" style="flex:1 1 0;max-width:420px;text-align:center">
+    <div class="title"><h1 style="font-size:34px">JOIN CO-OP</h1></div>
+    <div class="card">
+      <div class="hint">Type the 4-letter code from the host's screen</div>
+      <input id="codeIn" type="text" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" placeholder="····">
+      <div id="joinStatus" class="hint" style="min-height:20px;margin-top:8px"></div>
+    </div>
+  </div>
+  <div class="col" style="flex:1 1 0;max-width:420px">
+    <button class="big green" id="codeGoBtn">▶ Join</button>
+    <button class="big blue" id="scanCodeBtn">📷 Scan code</button>
+    <button class="big gray" id="offlineJoinBtn" style="font-size:16px;padding:12px">📶 No signal? Offline QR join</button>
+    <button class="big gray" id="joinBack" style="font-size:16px;padding:12px">Back</button>
   </div>
 </div>
 
 <div id="wait" class="screen hidden">
   <div class="col" style="text-align:center">
     <div class="title"><h1 style="font-size:40px">CONNECTED! ✅</h1></div>
-    <div class="card hint" style="font-size:18px">Waiting for the host to start the adventure…</div>
+    <div class="card hint" id="waitMsg" style="font-size:18px">Waiting for the host to start the adventure…</div>
     <button class="big gray" id="waitBack">Leave</button>
   </div>
 </div>
@@ -569,6 +602,7 @@ input::placeholder { color:#8a7656; }
 <script src="lib/three.min.js"></script>
 <script src="lib/qrcode.js"></script>
 <script src="lib/jsQR.js"></script>
+<script src="lib/peerjs.min.js"></script>
 <script src="net.js"></script>
 <script src="js/data.js"></script>
 <script src="js/dungeon.js"></script>

@@ -13,27 +13,77 @@ function makeBar() {
   g.quaternion.copy(camera.quaternion);
   return g;
 }
+// ---------- GPU resource cleanup ----------
+// Models clone materials (and some geometries) per instance; fx create materials/geometries per event.
+// Removed objects are queued here; gpuCollect() disposes every geometry/material/texture of them that
+// is no longer used by anything in the scene and is not one of the shared module-level resources.
+const gpuTrash = [];
+function trashObj(obj) { if (obj) { if (obj.parent) obj.parent.remove(obj); gpuTrash.push(obj); } }
+function sharedGpu() {
+  const s = new Set();
+  const add = (...a) => { for (const x of a) if (x) s.add(x); };
+  add(typeof BOXG !== 'undefined' && BOXG, typeof SPHG !== 'undefined' && SPHG, typeof SHADOW_GEO !== 'undefined' && SHADOW_GEO,
+    typeof SHADOW_MAT !== 'undefined' && SHADOW_MAT, PLANE, HPBAR_BG, HPBAR_FG, ringGeo, discGeo);
+  for (const k in sectorCache) add(sectorCache[k]);
+  for (const k in partMats) add(partMats[k]);
+  return s;
+}
+function gpuResources(n, fn) {
+  if (n.geometry) fn(n.geometry);
+  if (!n.material) return;
+  for (const m of (Array.isArray(n.material) ? n.material : [n.material])) {
+    fn(m);
+    for (const k in m) { const t = m[k]; if (t && t.isTexture) fn(t); }
+  }
+}
+function gpuCollect() {
+  if (!gpuTrash.length) return 0;
+  const cand = new Set();
+  for (const o of gpuTrash) o.traverse(n => { gpuResources(n, r => cand.add(r)); if (n.isInstancedMesh && n.dispose) n.dispose(); });
+  gpuTrash.length = 0;
+  scene.traverse(n => gpuResources(n, r => cand.delete(r))); // still in use somewhere
+  const keep = sharedGpu();
+  let n = 0;
+  for (const r of cand) if (!keep.has(r) && !(r.userData && r.userData.shared) && r.dispose) { r.dispose(); n++; }
+  return n;
+}
+function removeVis(key) {
+  const o = vis.get(key); if (!o) return;
+  trashObj(o.obj); if (o.bar) scene.remove(o.bar);
+  vis.delete(key);
+}
+
 let visFrame = 0;
+const VIS_GRACE = 0.5; // guest: keep a player/enemy visual this long when it is missing from the view
+// Follow an interpolated target exactly during normal motion, but blend corrections (after an
+// extrapolation guessed wrong) over ~100 ms instead of snapping; real teleports still snap.
+function followPos(o, tx, tz, dt) {
+  const dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz);
+  if (d > 6 || d <= 12 * dt + 0.02) { o.x = tx; o.z = tz; return; }
+  const k = Math.min(0.5, dt * 12);
+  o.x += dx * k; o.z += dz * k;
+}
 function syncVisuals(dt) {
   const v = G.view; if (!v) return;
   visFrame++;
   const guest = G.role === 'guest';
-  const sm = guest ? Math.min(1, dt * 12) : 1;
   const T = G.time;
+  // Positions in G.view are already smooth (host: sim state + interpolated remote players;
+  // guest: interpolated snapshots), so visuals follow them directly.
   // players
   for (const p of v.players) {
     const key = 'p' + p.id;
     let o = vis.get(key);
+    if (o && o.color !== p.color) { removeVis(key); o = null; }
     if (!o) {
       const model = buildPlayerModel(p.color);
       o = { obj: model.root, model, x: p.x, z: p.z, f: p.f, px: p.x, pz: p.z, color: p.color };
       scene.add(o.obj); vis.set(key, o);
     }
-    o.seen = visFrame;
+    o.seen = visFrame; o.seenT = T;
     const mine = p.id === G.myId;
-    const tx = mine ? me.x : p.x, tz = mine ? me.z : p.z;
     o.px = o.x; o.pz = o.z;
-    o.x += (tx - o.x) * (mine ? 1 : sm); o.z += (tz - o.z) * (mine ? 1 : sm);
+    if (mine) { o.x = me.x; o.z = me.z; } else followPos(o, p.x, p.z, dt);
     const spd = Math.hypot(o.x - o.px, o.z - o.pz) / Math.max(dt, 0.001);
     const wpnW = mine ? equipped().w : p.w, wpnR = mine ? equipped().r : p.r;
     setWeapon(o.model, wpnW, wpnR);
@@ -60,16 +110,16 @@ function syncVisuals(dt) {
     if (!o) {
       const model = buildEnemyModel(e.sk, G.theme, e.size);
       o = { obj: model.root, model, x: e.x, z: e.z, f: e.f, px: e.x, pz: e.z };
-      if (e.fl & 16) { // elite glow ring
+      if (e.fl & 16) { // elite glow ring (geometry/material are freed by gpuCollect when removed)
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 20), new THREE.MeshBasicMaterial({ color: 0xffb300, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
         ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; model.root.add(ring);
       }
       scene.add(o.obj); vis.set(key, o);
-      if (e.sk !== 'boss' && e.sk !== 'chest' && e.sk !== 'pot') { o.bar = makeBar(); o.bar.visible = false; scene.add(o.bar); }
+      if (e.sk !== 'boss' && !isPropSkin(e.sk)) { o.bar = makeBar(); o.bar.visible = false; scene.add(o.bar); }
     }
-    o.seen = visFrame;
+    o.seen = visFrame; o.seenT = T;
     o.px = o.x; o.pz = o.z;
-    o.x += (e.x - o.x) * sm; o.z += (e.z - o.z) * sm;
+    if (guest) followPos(o, e.x, e.z, dt); else { o.x = e.x; o.z = e.z; }
     const spd = Math.hypot(o.x - o.px, o.z - o.pz) / Math.max(dt, 0.001);
     o.f = lerpAngle(o.f, e.f, Math.min(1, dt * 12));
     o.obj.position.set(o.x, 0, o.z);
@@ -99,14 +149,11 @@ function syncVisuals(dt) {
     let o = vis.get(key);
     if (!o) {
       const model = buildProjModel(j.k, j.col ? RAR[j.col].hex : 0);
-      o = { obj: model, x: j.x, z: j.z, sx: j.x, sz: j.z };
+      o = { obj: model, x: j.x, z: j.z };
       scene.add(o.obj); vis.set(key, o);
     }
-    o.seen = visFrame;
-    if (guest) {
-      if (o.sx !== j.x || o.sz !== j.z) { o.sx = j.x; o.sz = j.z; o.x = j.x; o.z = j.z; }
-      else { o.x += j.vx * dt; o.z += j.vz * dt; }
-    } else { o.x = j.x; o.z = j.z; }
+    o.seen = visFrame; o.seenT = T;
+    o.x = j.x; o.z = j.z;
     o.obj.position.set(o.x, 1.0, o.z);
     o.obj.rotation.y = Math.atan2(j.vx, j.vz);
     if (j.k === 'bone') o.obj.rotation.x += dt * 12;
@@ -120,15 +167,20 @@ function syncVisuals(dt) {
       o = { obj: model, x: l.x, z: l.z, born: T };
       scene.add(o.obj); vis.set(key, o);
     }
-    o.seen = visFrame;
-    o.x += (l.x - o.x) * sm; o.z += (l.z - o.z) * sm;
+    o.seen = visFrame; o.seenT = T;
+    o.x = l.x; o.z = l.z;
     o.obj.position.set(o.x, 0, o.z);
     const inner = o.obj.userData.inner;
     inner.rotation.y += dt * 2.5;
     inner.position.y = 0.15 + Math.sin(T * 3 + l.id) * 0.12;
   }
+  // Remove visuals that left the view. Host: immediately (the view is the sim itself).
+  // Guest: projectiles/loot immediately (gone = hit/picked), players/enemies after a short grace
+  // (out of interest range, trimmed from a big snapshot); explicit despawns use removeVis() directly.
   for (const [k, o] of vis) {
-    if (o.seen !== visFrame) { scene.remove(o.obj); if (o.bar) scene.remove(o.bar); vis.delete(k); }
+    if (o.seen === visFrame) continue;
+    const c = k.charCodeAt(0); // 'p' players, 'e' enemies, 'j' projectiles, 'l' loot
+    if (!guest || c === 106 || c === 108 || T - (o.seenT || 0) > VIS_GRACE) removeVis(k);
   }
   // portal
   if (G.level && G.level.userData.portal) {
@@ -148,12 +200,12 @@ function lerpAngle(a, b, t) { let d = b - a; d = Math.atan2(Math.sin(d), Math.co
 // ---------- effects ----------
 const fxList = [];
 function addFx(obj, life, upd) { scene.add(obj); fxList.push({ obj, t: 0, life, upd }); }
-function clearFx() { for (const f of fxList) scene.remove(f.obj); fxList.length = 0; $('fx').innerHTML = ''; }
+function clearFx() { for (const f of fxList) trashObj(f.obj); fxList.length = 0; $('fx').innerHTML = ''; }
 function updateFx(dt) {
   for (let i = fxList.length - 1; i >= 0; i--) {
     const f = fxList[i]; f.t += dt;
     const k = f.t / f.life;
-    if (k >= 1) { scene.remove(f.obj); if (!f.keep && f.obj.material && f.obj.material.dispose) f.obj.material.dispose(); fxList.splice(i, 1); continue; }
+    if (k >= 1) { if (f.keep) scene.remove(f.obj); else trashObj(f.obj); fxList.splice(i, 1); continue; } // freed by gpuCollect
     f.upd && f.upd(f, k, dt);
   }
 }
