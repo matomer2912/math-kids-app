@@ -482,9 +482,9 @@ function updateShop(dt) {
   if (near && !shop.near) sfx('coin');
   shop.near = near;
   if (near && !shop.open) {
-    const v = new THREE.Vector3(mc.sx + mc.nx * 1.2, 3.6, mc.sz + mc.nz * 1.2).project(camera);
+    const v = new THREE.Vector3(mc.sx + mc.nx * 0.6, 4.4, mc.sz + mc.nz * 0.6).project(camera);
     pr.style.left = Math.round((v.x + 1) / 2 * innerWidth) + 'px';
-    pr.style.top = Math.round((1 - v.y) / 2 * innerHeight) + 'px';
+    pr.style.top = Math.max(56, Math.round((1 - v.y) / 2 * innerHeight)) + "px";
     pr.classList.remove('hidden');
   } else if (!pr.classList.contains('hidden')) pr.classList.add('hidden');
   if (shop.open) drawSkinPreview(dt);
