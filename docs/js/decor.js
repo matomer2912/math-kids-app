@@ -181,18 +181,18 @@ function dSkull(b, P, r, x, y, z, s, ry) {
   b.pop();
 }
 function dBone(b, P, r, x, y, z, ry, len) {
-  len = len || 0.45 + r() * 0.25;
-  b.box(djit(P.bone, r, 0.06), len, 0.06, 0.07, x, y, z, { ry, g: 0.2 });
-  b.box(P.bone, 0.1, 0.08, 0.12, x + Math.cos(ry) * len / 2, y, z - Math.sin(ry) * len / 2, { ry, g: 0.2 });
-  b.box(P.bone, 0.1, 0.08, 0.12, x - Math.cos(ry) * len / 2, y, z + Math.sin(ry) * len / 2, { ry, g: 0.2 });
+  len = len || 0.6 + r() * 0.3;
+  b.box(djit(P.bone, r, 0.06), len, 0.09, 0.1, x, y, z, { ry, g: 0.2 });
+  b.box(P.bone, 0.15, 0.12, 0.17, x + Math.cos(ry) * len / 2, y, z - Math.sin(ry) * len / 2, { ry, g: 0.2 });
+  b.box(P.bone, 0.15, 0.12, 0.17, x - Math.cos(ry) * len / 2, y, z + Math.sin(ry) * len / 2, { ry, g: 0.2 });
 }
 function dLeafFan(b, r, cols, n, len, x, y, z, spread, sw) {
   for (let s = 0; s < n; s++) {
     const yaw = (s / n) * 6.283 + r() * 0.6, pitch = spread * (0.75 + r() * 0.5), L = len * (0.7 + r() * 0.5);
-    b.blade(djit(dpick(cols, r), r, 0.1), 0.16 + r() * 0.1, L, 0.04, x, y, z, yaw, pitch, { sw, g: 0.35 });
+    b.blade(djit(dpick(cols, r), r, 0.1), 0.26 + r() * 0.1, L, 0.06, x, y, z, yaw, pitch, { sw, g: 0.4 });
     // drooping tip
     const tx = x + Math.sin(yaw) * Math.sin(pitch) * L, ty = y + Math.cos(pitch) * L, tz = z + Math.cos(yaw) * Math.sin(pitch) * L;
-    b.blade(djit(dpick(cols, r), r, 0.1), 0.13, L * 0.5, 0.035, tx, ty - 0.03, tz, yaw, Math.min(2.2, pitch + 0.9), { sw: sw * 1.4, sb: sw, g: 0.1 });
+    b.blade(djit(dpick(cols, r), r, 0.1), 0.2, L * 0.55, 0.05, tx, ty - 0.04, tz, yaw, Math.min(2.2, pitch + 0.9), { sw: sw * 1.4, sb: sw, g: 0.1 });
   }
 }
 
@@ -200,14 +200,14 @@ function dLeafFan(b, r, cols, n, len, x, y, z, spread, sw) {
 DPROP.candles = (b, r, P) => {
   const n = 3 + Math.floor(r() * 4);
   for (let s = 0; s < n; s++) {
-    const a = r() * 6.283, d = s ? 0.12 + r() * 0.24 : 0, h = (s ? 0.1 + r() * 0.24 : 0.28 + r() * 0.2), w = 0.07 + r() * 0.04;
+    const a = r() * 6.283, d = s ? 0.16 + r() * 0.3 : 0, h = (s ? 0.18 + r() * 0.35 : 0.5 + r() * 0.3), w = 0.12 + r() * 0.05;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     b.box(djit(P.wax, r, 0.06), w, h, w, x, 0, z, { g: 0.3 });
     b.box(P.wax2, w * 1.7, 0.02, w * 1.7, x, 0, z, { g: 0 });
-    b.flame(x, h + 0.07, z, 0.07, 0.13, P.fire, P.fire2);
+    b.flame(x, h + 0.09, z, 0.1, 0.19, P.fire, P.fire2);
   }
-  b.glow(0, 0, 0.05, 0, 3.4, 3.4, P.fire, 0.5, 0.1);
-  b.glow(2, 0, 0.5, 0.15, 1.3, 1.3, P.fire, 0.4, 0.16);
+  b.glow(0, 0, 0.05, 0, 4.2, 4.2, P.fire, 0.55, 0.1);
+  b.glow(2, 0, 0.6, 0.15, 1.7, 1.7, P.fire, 0.5, 0.16);
   if (r() < 0.45) b.light(0, 0.9, 0.4, P.fire, 1.2, 7);
   if (r() < 0.5) b.mote(2, 0, 0.3, 0, P.fire, 0.12, 0.8 + r() * 0.6);
 };
@@ -215,23 +215,23 @@ DPROP.skullPile = (b, r, P) => {
   const n = 4 + Math.floor(r() * 5);
   for (let s = 0; s < n; s++) {
     const layer = s < 4 ? 0 : s < 7 ? 1 : 2, a = r() * 6.283, d = (2 - layer) * 0.16 * r();
-    dSkull(b, P, r, Math.cos(a) * d, layer * 0.2, Math.sin(a) * d * 0.7, 0.9 + r() * 0.3, (r() - 0.5) * 1.2);
+    dSkull(b, P, r, Math.cos(a) * d * 1.4, layer * 0.27, Math.sin(a) * d, 1.25 + r() * 0.35, (r() - 0.5) * 1.2);
   }
   for (let s = 0; s < 3; s++) dBone(b, P, r, (r() - 0.5) * 0.8, 0, (r() - 0.3) * 0.5, r() * 3);
 };
 DPROP.bones = (b, r, P) => {
   const n = 2 + Math.floor(r() * 3);
   for (let s = 0; s < n; s++) dBone(b, P, r, (r() - 0.5) * 1.0, 0, (r() - 0.5) * 0.8, r() * 3);
-  if (r() < 0.5) dSkull(b, P, r, (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.4, 0.9, (r() - 0.5) * 2);
+  if (r() < 0.5) dSkull(b, P, r, (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.4, 1.25, (r() - 0.5) * 2);
 };
 DPROP.rubble = (b, r, P) => {
   const n = 3 + Math.floor(r() * 4);
-  for (let s = 0; s < n; s++) { const w = 0.15 + r() * 0.3; b.box(djit(dpick(P.stones, r), r, 0.1), w, w * (0.5 + r() * 0.5), w * (0.7 + r() * 0.5), (r() - 0.5) * 1.1, 0, (r() - 0.5) * 0.6, { ry: r() * 3, g: 0.35 }); }
+  for (let s = 0; s < n; s++) { const w = 0.22 + r() * 0.4; b.box(djit(dpick(P.stones, r), r, 0.1), w, w * (0.5 + r() * 0.5), w * (0.7 + r() * 0.5), (r() - 0.5) * 1.1, 0, (r() - 0.5) * 0.6, { ry: r() * 3, g: 0.35 }); }
 };
 DPROP.cobweb = (b, r, P) => {   // flat on the back wall face, fanning out of the corner (origin = the corner, on the floor)
-  const sg = b.cs || 1, top = (b.H || 2) - 0.08, sz = 0.75 + r() * 0.35;
-  for (let s = 0; s < 5; s++) { const a = 0.15 + s * 0.32; b.box(P.web, 0.03, sz * (0.85 + r() * 0.3), 0.02, 0, top, 0.02, { rz: -sg * (Math.PI - a), g: 0 }); }
-  for (let ring = 1; ring <= 3; ring++) { const d = ring * sz * 0.3; b.box(P.web, d * 1.19, 0.025, 0.02, sg * d * 0.57, top - d * 0.565, 0.025, { rz: sg * 0.785, g: 0 }); }
+  const sg = b.cs || 1, top = (b.H || 2) - 0.08, sz = 1.0 + r() * 0.4;
+  for (let s = 0; s < 5; s++) { const a = 0.15 + s * 0.32; b.box(P.web, 0.05, sz * (0.85 + r() * 0.3), 0.03, 0, top, 0.02, { rz: -sg * (Math.PI - a), g: 0 }); }
+  for (let ring = 1; ring <= 3; ring++) { const d = ring * sz * 0.3; b.box(P.web, d * 1.19, 0.04, 0.03, sg * d * 0.57, top - d * 0.565, 0.025, { rz: sg * 0.785, g: 0 }); }
 };
 DPROP.sarcophagus = (b, r, P) => {   // upright coffin set into the wall face; origin = top edge of the face
   const H = b.H || 2, y0 = -H, st = djit(P.stone2, r, 0.05);
@@ -247,9 +247,9 @@ DPROP.sarcophagus = (b, r, P) => {   // upright coffin set into the wall face; o
 DPROP.chains = (b, r, P) => {     // hanging from the top edge down the face
   const n = 1 + Math.floor(r() * 2);
   for (let c = 0; c < n; c++) {
-    const x = (r() - 0.5) * 1.2, len = 6 + Math.floor(r() * 6);
-    for (let s = 0; s < len; s++) { const sw = s * 0.006; b.box(P.iron, s & 1 ? 0.05 : 0.11, 0.13, s & 1 ? 0.11 : 0.05, x, -0.12 - s * 0.11, 0.06, { g: 0, sw, sb: sw }); }
-    if (r() < 0.5) b.box(P.iron, 0.18, 0.12, 0.18, x, -0.12 - len * 0.11 - 0.1, 0.06, { g: 0.2, sw: len * 0.006, sb: len * 0.006 });
+    const x = (r() - 0.5) * 1.2, len = 5 + Math.floor(r() * 5);
+    for (let s = 0; s < len; s++) { const sw = s * 0.006; b.box(P.iron, s & 1 ? 0.07 : 0.17, 0.18, s & 1 ? 0.17 : 0.07, x, -0.12 - s * 0.15, 0.08, { g: 0, sw, sb: sw }); }
+    if (r() < 0.5) b.box(P.iron, 0.26, 0.18, 0.26, x, -0.12 - len * 0.15 - 0.15, 0.08, { g: 0.2, sw: len * 0.006, sb: len * 0.006 });
   }
   b.box(P.iron, 1.3, 0.06, 0.06, 0, -0.1, 0.04, { g: 0 });
 };
@@ -297,6 +297,11 @@ DPROP.crystals = (b, r, P) => {
   if (r() < 0.6) b.light(0, 1.0, 0.4, P.crystal, 1.1, 8);
   b.mote(0, 0, 0.6, 0, P.crystal, 0.1, 0.6);
 };
+DPROP.slabs = (b, r, P) => {    // wall top: broken dark slabs, grave soil, a crack
+  const n = 1 + Math.floor(r() * 2);
+  for (let s = 0; s < n; s++) { const w = 0.6 + r() * 0.8; b.box(djit(dpick(P.slab, r), r, 0.08), w, 0.08 + r() * 0.1, w * (0.6 + r() * 0.4), (r() - 0.5) * 1.0, 0, (r() - 0.5) * 0.9, { ry: (r() - 0.5) * 0.5, g: 0.2 }); }
+  if (r() < 0.5) b.box(0x1c1d22, 1.2, 0.02, 0.07, (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.6, { ry: r() * 3, g: 0 });
+};
 DPROP.lichen = (b, r, P) => { const w = 0.6 + r() * 0.9; b.box(djit(P.lichen, r, 0.1), w, 0.03, w * (0.5 + r() * 0.5), (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.6, { ry: r() * 3, g: 0 }); };
 DPROP.candleRing = (b, r, P) => {   // around a statue / coffin (origin = statue centre; candles at the edge of its tile)
   for (let s = 0; s < 4; s++) {
@@ -308,8 +313,8 @@ DPROP.candleRing = (b, r, P) => {   // around a statue / coffin (origin = statue
 DPROP.boneRing = (b, r, P) => { for (let s = 0; s < 3; s++) { const a = r() * 6.283; b.push(Math.cos(a) * 0.8, 0, Math.sin(a) * 0.8, r() * 3, 0.8); DPROP.bones(b, r, P); b.pop(); } };
 
 // ---- Jungle Temple ----
-DPROP.fern = (b, r, P) => dLeafFan(b, r, P.leaf, 6 + Math.floor(r() * 4), 0.45 + r() * 0.25, 0, 0, 0, 0.9, 0.035);
-DPROP.lowFern = (b, r, P) => dLeafFan(b, r, P.leaf, 5 + Math.floor(r() * 3), 0.3 + r() * 0.12, 0, 0, 0, 1.15, 0.025);
+DPROP.fern = (b, r, P) => dLeafFan(b, r, P.leaf, 6 + Math.floor(r() * 3), 0.75 + r() * 0.3, 0, 0, 0, 0.85, 0.04);
+DPROP.lowFern = (b, r, P) => dLeafFan(b, r, P.leaf, 5 + Math.floor(r() * 2), 0.5 + r() * 0.15, 0, 0, 0, 1.2, 0.03);
 DPROP.broadLeaf = (b, r, P) => {
   const n = 3 + Math.floor(r() * 3);
   for (let s = 0; s < n; s++) {
@@ -320,15 +325,15 @@ DPROP.broadLeaf = (b, r, P) => {
   }
 };
 DPROP.grass = (b, r, P) => {
-  const n = 5 + Math.floor(r() * 6);
+  const n = 4 + Math.floor(r() * 3), dry = r() < 0.3;
   for (let s = 0; s < n; s++) {
-    const c = djit(r() < 0.25 ? P.grassDry : dpick(P.leaf, r), r, 0.12), h = 0.18 + r() * 0.32;
-    b.blade(c, 0.05, h, 0.05, (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.4, r() * 6.283, r() * 0.45, { sw: 0.04 * h / 0.3, g: 0.5 });
+    const c = djit(dry ? P.grassDry : dpick(P.leaf, r), r, 0.12), h = 0.35 + r() * 0.4;
+    b.blade(c, 0.11, h, 0.1, (r() - 0.5) * 0.6, 0, (r() - 0.5) * 0.45, r() * 6.283, 0.15 + r() * 0.45, { sw: 0.05 * h / 0.4, g: 0.55 });
   }
 };
 DPROP.flowers = (b, r, P) => {
   if (r() < 0.45) {   // big red jungle flower lying in its leaves (like a rafflesia)
-    const c = djit(dpick(P.flower, r), r, 0.1), s = 0.8 + r() * 0.4;
+    const c = djit(dpick(P.flower, r), r, 0.1), s = 1.4 + r() * 0.5;
     b.push(0, 0, 0, r() * 3, s);
     dLeafFan(b, r, P.leaf, 4, 0.35, 0, 0, 0, 1.3, 0.02);
     for (let k = 0; k < 5; k++) { const a = k * 1.2566; b.box(c, 0.22, 0.07, 0.3, Math.sin(a) * 0.17, 0.04, Math.cos(a) * 0.17, { ry: a, rx: -0.25, g: 0.15 }); }
@@ -338,13 +343,21 @@ DPROP.flowers = (b, r, P) => {
   } else {             // cluster of tall orange/red blooms
     const n = 3 + Math.floor(r() * 3), c = dpick(P.flower, r);
     for (let s = 0; s < n; s++) {
-      const x = (r() - 0.5) * 0.5, z = (r() - 0.5) * 0.4, h = 0.25 + r() * 0.3;
-      b.box(P.stem, 0.04, h, 0.04, x, 0, z, { sw: 0.04, g: 0.3 });
-      b.box(djit(c, r, 0.12), 0.14, 0.1, 0.14, x, h, z, { ry: r(), sw: 0.04, sb: 0.04, g: 0 });
-      b.box(P.pollen, 0.05, 0.04, 0.05, x, h + 0.09, z, { sw: 0.04, sb: 0.04, g: 0 });
+      const x = (r() - 0.5) * 0.7, z = (r() - 0.5) * 0.5, h = 0.35 + r() * 0.4;
+      b.box(P.stem, 0.07, h, 0.07, x, 0, z, { sw: 0.05, g: 0.3 });
+      b.box(djit(c, r, 0.12), 0.24, 0.16, 0.24, x, h, z, { ry: r(), sw: 0.05, sb: 0.05, g: 0 });
+      b.box(P.pollen, 0.09, 0.06, 0.09, x, h + 0.14, z, { sw: 0.05, sb: 0.05, g: 0 });
     }
-    dLeafFan(b, r, P.leaf, 4, 0.25, 0, 0, 0, 1.1, 0.02);
+    dLeafFan(b, r, P.leaf, 4, 0.45, 0, 0, 0, 1.1, 0.025);
   }
+};
+DPROP.overgrowth = (b, r, P) => {   // wall top: thick leafy mats, some hanging over the edge (+z)
+  const n = 2 + Math.floor(r() * 2);
+  for (let s = 0; s < n; s++) {
+    const w = 0.7 + r() * 0.9, h = 0.12 + r() * 0.22, x = (r() - 0.5) * 1.1, z = (r() - 0.5) * 1.1;
+    b.box(djit(dpick(s ? P.leaf : P.leafDark, r), r, 0.1), w, h, w * (0.7 + r() * 0.4), x, 0, z, { ry: (r() - 0.5) * 0.4, g: 0.25, sw: 0.015 });
+  }
+  if (r() < 0.5) b.box(djit(dpick(P.leaf, r), r, 0.1), 0.9 + r() * 0.6, 0.35, 0.16, (r() - 0.5) * 0.6, -0.3, 0.95, { g: 0.3, sb: 0.03 });
 };
 DPROP.moss = (b, r, P) => {
   const n = 1 + Math.floor(r() * 3);
@@ -352,13 +365,13 @@ DPROP.moss = (b, r, P) => {
 };
 DPROP.vines = (b, r, P) => {     // draped over the top edge of a wall and hanging down its face
   const H = b.H || 2, n = 2 + Math.floor(r() * 3);
-  b.box(djit(dpick(P.leaf, r), r, 0.1), 1.6 + r() * 0.4, 0.08, 0.7, (r() - 0.5) * 0.3, 0, -0.32, { g: 0 });   // leafy mat on top
+  b.box(djit(dpick(P.leafDark, r), r, 0.1), 1.8 + r() * 0.3, 0.14, 0.8, (r() - 0.5) * 0.3, 0, -0.32, { g: 0 });   // leafy mat on top
   for (let s = 0; s < n; s++) {
     const x = (r() - 0.5) * 1.6, len = 0.5 + r() * Math.min(1.5, H - 0.3), seg = Math.max(2, Math.round(len / 0.25));
     for (let k = 0; k < seg; k++) {
       const y = -0.04 - k * (len / seg), sw = 0.01 + k * 0.012;
-      b.box(P.vine, 0.07, len / seg + 0.02, 0.05, x + Math.sin(k * 1.3 + s) * 0.04, y - len / seg, 0.04, { g: 0, sw, sb: sw + 0.012 });
-      if (k % 2 === 0 || k === seg - 1) b.box(djit(dpick(P.leaf, r), r, 0.12), 0.22, 0.16, 0.05, x + (k & 2 ? 0.1 : -0.1), y - len / seg, 0.07, { rz: (k & 2 ? -0.5 : 0.5), g: 0, sw: sw + 0.01, sb: sw + 0.02 });
+      b.box(P.vine, 0.11, len / seg + 0.02, 0.08, x + Math.sin(k * 1.3 + s) * 0.04, y - len / seg, 0.04, { g: 0, sw, sb: sw + 0.012 });
+      if (k % 2 === 0 || k === seg - 1) b.box(djit(dpick(P.leaf, r), r, 0.12), 0.32, 0.24, 0.07, x + (k & 2 ? 0.14 : -0.14), y - len / seg, 0.07, { rz: (k & 2 ? -0.5 : 0.5), g: 0, sw: sw + 0.01, sb: sw + 0.02 });
     }
   }
 };
@@ -372,9 +385,9 @@ DPROP.roots = (b, r, P) => {     // big roots crawling out of the wall base over
   }
 };
 DPROP.bush = (b, r, P) => {      // dense leafy clump (wall tops / void border)
-  const n = 3 + Math.floor(r() * 3), s = 0.7 + r() * 0.5;
+  const n = 2 + Math.floor(r() * 3), s = 1.0 + r() * 0.5;
   for (let k = 0; k < n; k++) {
-    const w = (0.7 + r() * 0.6) * s, h = (0.4 + r() * 0.5) * s, x = (r() - 0.5) * 1.0, z = (r() - 0.5) * 0.9, y = r() * 0.35 * s;
+    const w = (0.8 + r() * 0.6) * s, h = (0.5 + r() * 0.5) * s, x = (r() - 0.5) * 1.1, z = (r() - 0.5) * 1.0, y = r() * 0.3 * s;
     b.box(djit(dpick(P.leafDark, r), r, 0.1), w, h, w * (0.8 + r() * 0.3), x, y, z, { ry: r(), g: 0.35, sw: 0.025 });
     b.box(djit(dpick(P.leaf, r), r, 0.1), w * 0.7, h * 0.35, w * 0.6, x + 0.05, y + h, z + 0.05, { ry: r(), g: 0.1, sw: 0.035, sb: 0.025 });
   }
@@ -391,7 +404,7 @@ DPROP.tree = (b, r, P) => {      // big jungle tree: buttressed trunk out of the
   const lean = 0.9 + r() * 0.5;
   for (let s = 0; s < 3; s++) { const x = (r() - 0.5) * 2.4, z = lean + (r() - 0.2) * 1.3, L = 0.8 + r() * 1.4; b.box(P.vine, 0.06, L, 0.06, x, th - L, z, { sb: 0.06, sw: 0.01, g: 0 }); }
   // canopy: 3 layers of leaf slabs, darker underneath, sunlit on top
-  const layers = [[3.4, 0.7, -0.1], [2.8, 0.6, 0.5], [1.9, 0.5, 1.0]];
+  const layers = [[4.4, 0.8, -0.2], [3.4, 0.7, 0.5], [2.2, 0.6, 1.1]];
   for (const [w, h, y] of layers) {
     const n = 3 + Math.floor(r() * 2);
     for (let k = 0; k < n; k++) {
@@ -484,10 +497,10 @@ const DECOR_KITS = {
     pal: {
       bone: 0xdcd8c6, bone2: 0xb8b4a2, wax: 0xd8d2bc, wax2: 0xbab29a, fire: 0x46ffc4, fire2: 0xd8fff2,
       stone: 0x6a6d78, stone2: 0x4c4f5a, stones: [0x5a5d68, 0x6e717c, 0x4a4d57], iron: 0x2c2e34, web: 0xc8ccd4,
-      root: 0x3b3029, lichen: 0x4f6b62, crystal: 0x3ff0d8, crystal2: 0x9ffff0,
+      root: 0x3b3029, lichen: 0x4f6b62, crystal: 0x3ff0d8, crystal2: 0x9ffff0, slab: [0x3c3e47, 0x34363e, 0x2e2a2c, 0x45474f],
     },
-    mist: { n: 26, c: 0x6fa0c8, i: 0.13, y: 0.3, s: [5, 9] },
-    shafts: { c: 0x8fb0ff, i: 0.16, per: 0.45, w: [1.6, 2.6] },
+    mist: { n: 34, c: 0x6fa0c8, i: 0.24, y: 0.3, s: [5, 9] },
+    shafts: { c: 0x8fb0ff, i: 0.3, per: 0.5, w: [1.8, 2.8] },
     wisps: { c: 0x6affd8, n: 0.5 },                    // rising soul wisps from chasms (per pit tile probability)
     rules: [
       { p: 'sarcophagus', at: 'faceN', d: 0.07, sp: 4, solo: 1, minH: 1.7 },
@@ -498,16 +511,19 @@ const DECOR_KITS = {
       { p: 'candles', at: 'cornerN', d: 0.75, in: 0.35, solo: 1 },
       { p: 'skullPile', at: 'cornerN', d: 0.5, in: 0.3, solo: 1 },
       { p: 'skullPile', at: 'cornerS', d: 0.3, in: 0.3, s: [0.7, 0.9], solo: 1 },
-      { p: 'candles', at: 'edgeN', d: 0.1, sp: 3, in: 0.3, solo: 1 },
+      { p: 'candles', at: 'edgeN', d: 0.16, sp: 3, in: 0.35, solo: 1 },
+      { p: 'candles', at: 'edgeE', d: 0.05, sp: 4, in: 0.35, solo: 1 },
+      { p: 'candles', at: 'edgeW', d: 0.05, sp: 4, in: 0.35, solo: 1 },
       { p: 'tombstone', at: 'edgeN', d: 0.08, sp: 3, in: 0.2, solo: 1 },
       { p: 'crystals', at: 'edge', d: 0.025, sp: 7, in: 0.3, solo: 1 },
       { p: 'rubble', at: 'edge', d: 0.14, in: 0.3 },
       { p: 'bones', at: 'edge', d: 0.08, in: 0.45 },
       { p: 'bones', at: 'floor', d: 0.03 },
       { p: 'lichen', at: 'floor', d: 0.04 },
-      { p: 'candles', at: 'wallTopN', d: 0.05, sp: 4, h: 0.5, solo: 1 },
+      { p: 'candles', at: 'wallTopN', d: 0.1, sp: 3, h: 0.8, solo: 1 },
+      { p: 'slabs', at: 'wallTop', d: 0.45 },
       { p: 'tombstone', at: 'wallTopN', d: 0.06, sp: 3, h: 0.9, solo: 1 },
-      { p: 'rubble', at: 'wallTop', d: 0.16 },
+      { p: 'rubble', at: 'wallTop', d: 0.14 },
       { p: 'bones', at: 'wallTop', d: 0.07 },
       { p: 'lichen', at: 'wallTop', d: 0.12 },
       { p: 'ruinPillar', at: 'void', d: 0.09, sp: 4, h: 7, rad: 0.7 },
@@ -518,17 +534,17 @@ const DECOR_KITS = {
   },
   jungle: {
     pal: {
-      leaf: [0x2f7426, 0x3f8c2c, 0x4f9e34, 0x5aae3c, 0x376a28], leafDark: [0x1e4a1c, 0x24561f, 0x2c6224, 0x1a3f1a],
+      leaf: [0x2c6a22, 0x367c26, 0x42902c, 0x285e1e, 0x4c9a30], leafDark: [0x173d16, 0x1d4a1a, 0x22561e, 0x14341a],
       grassDry: 0x9ab04a, stem: 0x3a6a22, vine: 0x2e6424, bark: 0x5a4430, root: 0x6a4c30, moss: 0x4c8a2c,
       flower: [0xe0302a, 0xff6a1a, 0xd8203a], pollen: 0xffd84a, stone: 0x7c846a, stones: [0x6c745c, 0x7c846a, 0x5c644e],
       iron: 0x3a3430, ember: 0xff8a2a, fire: 0xffa63a, fire2: 0xfff0b0, eye: 0x4dff9a, shroom: [0xd8402a, 0xff8a3a, 0xe8c040],
       stemPale: 0xe8dcc0, water: 0x24555a, waterHi: 0x9fe0e0, waterGlow: 0x5affd0,
     },
-    fireflies: { c: 0xd8ff6a, c2: 0xffe27a, n: 0.5 },     // per tree/bush/fern anchor probability
-    shafts: { c: 0xfff0b8, i: 0.2, per: 0.7, w: [1.8, 3.0] },
+    fireflies: { c: 0xd8ff6a, c2: 0xffe27a, n: 0.35 },     // per tree/bush/fern anchor probability
+    shafts: { c: 0xfff0b8, i: 0.3, per: 0.7, w: [2.0, 3.2] },
     rules: [
       { p: 'tree', at: 'void', d: 0.32, sp: 3, h: 6.6, rad: 1.4, fwd: 0.4 },
-      { p: 'bush', at: 'void', d: 0.6, h: 2.8, rad: 0.8, y: 0.9 },
+      { p: 'bush', at: 'void', d: 0.35, h: 2.8, rad: 0.8, y: 0.9 },
       { p: 'vines', at: 'faceN', d: 0.45, sp: 1, solo: 1 },
       { p: 'vines', at: 'faceSide', d: 0.25, sp: 2, solo: 1 },
       { p: 'brazier', at: 'cornerN', d: 0.45, sp: 5, h: 2.6, in: 0.5, solo: 1 },
@@ -547,7 +563,7 @@ const DECOR_KITS = {
       { p: 'flowers', at: 'edgeN', d: 0.09, sp: 2, in: 0.4 },
       { p: 'flowers', at: 'cornerS', d: 0.2, in: 0.5 },
       { p: 'mushrooms', at: 'edge', d: 0.06, in: 0.3 },
-      { p: 'grass', at: 'edge', d: 0.4, in: 0.3 },
+      { p: 'grass', at: 'edge', d: 0.3, in: 0.3 },
       { p: 'moss', at: 'edge', d: 0.3, in: 0.5 },
       { p: 'grass', at: 'floor', d: 0.05 },
       { p: 'moss', at: 'floor', d: 0.05 },
@@ -558,9 +574,10 @@ const DECOR_KITS = {
       { p: 'fern', at: 'wallTopN', d: 0.35 },
       { p: 'fern', at: 'wallTopSide', d: 0.3 },
       { p: 'lowFern', at: 'wallTopS', d: 0.25 },
-      { p: 'grass', at: 'wallTop', d: 0.6 },
+      { p: 'overgrowth', at: 'wallTop', d: 0.55 },
+      { p: 'grass', at: 'wallTop', d: 0.3 },
       { p: 'flowers', at: 'wallTop', d: 0.07, h: 0.6 },
-      { p: 'moss', at: 'wallTop', d: 0.4 },
+      { p: 'moss', at: 'wallTop', d: 0.25 },
       { p: 'lowFern', at: 'pitEdge', d: 0.3, in: 0.35 },
       { p: 'lilies', at: 'pit', d: 0.3 },
     ],
@@ -734,7 +751,7 @@ function buildDecor(map, theme, group) {
       }
       if (rule.solo) slot[s.k] |= bit;
       if (sp) mark(s.i, s.j);
-      put(rule.p, s, r, sc);
+      const b0 = out.stats.boxes; put(rule.p, s, r, sc); const rk = rule.p + "@" + rule.at; out.stats.by = out.stats.by || {}; out.stats.by[rk] = (out.stats.by[rk] || 0) + out.stats.boxes - b0;
       if (/fern|bush|tree|flowers|broadLeaf/.test(rule.p)) anchors.push(s.x, s.y + (rule.p === 'tree' ? 2.4 : 0.6), s.z);
     }
   });
@@ -764,7 +781,7 @@ function buildDecor(map, theme, group) {
   // fireflies around vegetation
   if (kit.fireflies) for (let n = 0; n < anchors.length; n += 3) {
     if (r2() > kit.fireflies.n * dens) continue;
-    out.motes.push(anchors[n] + (r2() - 0.5) * 1.5, anchors[n + 1] + 0.3 + r2() * 1.2, anchors[n + 2] + (r2() - 0.5) * 1.5, 0, r2() < 0.5 ? kit.fireflies.c : kit.fireflies.c2, 0.13, 0.35 + r2() * 0.4);
+    out.motes.push(anchors[n] + (r2() - 0.5) * 1.5, anchors[n + 1] + 0.3 + r2() * 1.2, anchors[n + 2] + (r2() - 0.5) * 1.5, 0, r2() < 0.5 ? kit.fireflies.c : kit.fireflies.c2, 0.2, 0.35 + r2() * 0.4);
   }
 
   // ---- light shafts (rooms only, not near the portal / spawn) ----
