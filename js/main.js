@@ -13,6 +13,10 @@ function loadFloor(floor, seed, sx, sz) {
   if (G.level) trashObj(G.level);
   G.level = buildLevel(G.map, G.theme);
   scene.add(G.level);
+  // merchant stall (static scenery, deterministic from the seed so every device has it)
+  G.merchant = G.map.merchant ? buildMerchantModel(G.theme, G.map.merchant) : null;
+  if (G.merchant) G.level.add(G.merchant);
+  shopFloorReset();
   scene.background = new THREE.Color(G.theme.voidc);
   scene.fog = new THREE.Fog(G.theme.voidc, 20, 40);
   hemi.color.setHex(G.theme.hemi); hemi.groundColor.setHex(G.theme.ground);
@@ -112,7 +116,7 @@ function quitToMenu() {
 const NET_HZ = 20, SEND_MS = 1000 / NET_HZ;
 const SNAP_BUDGET = 1100;           // bytes: one SCTP/DTLS packet (fragments of unreliable msgs get lost)
 const INTERP_MIN = 100, INTERP_MAX = 320, EXTRAP_MAX = 200;
-const EV_IMPORTANT = new Set(['die', 'msg', 'bossdead', 'down', 'revived']);
+const EV_IMPORTANT = new Set(['die', 'msg', 'bossdead', 'down', 'revived', 'phoenix', 'buff']);
 const EV_POS = new Set(['dmg', 'boom', 'ring', 'tele', 'teleline', 'zap', 'die', 'dashfx', 'lanes', 'shock', 'bolt', 'cloud', 'spikeline', 'block']); // a[1], a[2] = x, z
 const EV_OWN = new Set(['hurt', 'pick']);                                                     // a[1] = player id
 const netStats = { sent: 0, sentBytes: 0, sentMax: 0, evOverflow: 0, trimmed: 0, recv: 0, recvBytes: 0, recvMax: 0, extrapT: 0, frames: 0, log: [] };
@@ -262,10 +266,10 @@ function hostSendSnaps(now) {
 
 // Host (and solo) render straight from the sim state: no encode/decode per frame.
 function hostView() {
-  const S = Sim.S, V = { fl: S.floor, players: [], enemies: [], projs: [], loot: [], boss: 0, po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0, k: 0 };
+  const S = Sim.S, V = { fl: S.floor, players: [], enemies: [], projs: [], loot: [], boss: 0, po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0, pt: Sim.portalTenths(), k: 0 };
   for (const p of S.players.values()) {
     const pv = p.id === G.myId ? me : hostPV.get(p.id) || p;
-    V.players.push({ id: p.id, x: pv.x, z: pv.z, f: pv.f, hp: Math.round(p.hp), maxHp: p.maxHp, downed: p.downed, atk: p.atkAnim > 0, w: p.wpn.w, r: p.wpn.r, color: p.color, lvl: p.lvl, name: p.name, rev: p.revive, aim: p.aim || p.f });
+    V.players.push({ id: p.id, x: pv.x, z: pv.z, f: pv.f, hp: Math.round(p.hp), maxHp: p.maxHp, downed: p.downed, atk: p.atkAnim > 0, w: p.wpn.w, r: p.wpn.r, color: p.color, lvl: p.lvl, name: p.name, rev: p.revive, aim: p.aim || p.f, skin: p.skin || '', bf: Sim.pflags(p) >> 7 });
   }
   for (const e of S.enemies) {
     if (e.hp <= 0) continue;
@@ -287,12 +291,12 @@ let lastSnapQ = -1, needResync = false, cacheSweepT = 0;
 
 function decodeSnap(m) {
   const Q = Sim.QP, A = Sim.QA, V = Sim.QV;
-  const s = { q: m.q, tm: m.tm, fl: m.fl, b: m.b, po: m.po, pn: m.pn, k: m.k, P: new Map(), E: new Map(), J: new Map(), L: new Map() };
+  const s = { q: m.q, tm: m.tm, fl: m.fl, b: m.b, po: m.po, pn: m.pn, pt: m.pt || 0, k: m.k, P: new Map(), E: new Map(), J: new Map(), L: new Map() };
   for (const a of m.p || []) {
     const key = 'p' + a[0];
-    if (a.length > 7) statCache.set(key, { maxHp: a[7], w: a[8], r: a[9], color: a[10], lvl: a[11], name: a[12] });
+    if (a.length > 7) statCache.set(key, { maxHp: a[7], w: a[8], r: a[9], color: a[10], lvl: a[11], name: a[12], skin: a[13] || '' });
     const st = statCache.get(key); if (!st) { needResync = true; continue; }
-    s.P.set(a[0], { id: a[0], x: a[1] / Q, z: a[2] / Q, f: a[3] / A, hp: a[4], maxHp: st.maxHp, downed: !!(a[5] & 1), atk: !!(a[5] & 2), rev: (a[5] >> 2) / 10, aim: a[6] / A, w: st.w, r: st.r, color: st.color, lvl: st.lvl, name: st.name });
+    s.P.set(a[0], { id: a[0], x: a[1] / Q, z: a[2] / Q, f: a[3] / A, hp: a[4], maxHp: st.maxHp, downed: !!(a[5] & 1), atk: !!(a[5] & 2), rev: ((a[5] >> 2) & 31) / 10, bf: (a[5] >> 7) & 7, aim: a[6] / A, w: st.w, r: st.r, color: st.color, lvl: st.lvl, name: st.name, skin: st.skin });
   }
   for (const a of m.e || []) {
     const key = 'e' + a[0];
@@ -339,7 +343,7 @@ function guestView(now, dt) {
   if (r.i > 4) snapBuf.splice(0, r.i - 4);
   if (!r.b && r.ext > 0) netStats.extrapT += dt;
   const A = r.a, B = r.b;
-  const V = { fl: latest.fl, players: [], enemies: [], projs: [], loot: [], boss: latest.b, po: latest.po, pn: latest.pn, k: latest.k };
+  const V = { fl: latest.fl, players: [], enemies: [], projs: [], loot: [], boss: latest.b, po: latest.po, pn: latest.pn, pt: latest.pt, k: latest.k };
   const mix = (key, out, mode) => {
     for (const [id, a] of A[key]) {
       if (key === 'E' && goneE.has(id)) continue;
@@ -394,6 +398,7 @@ Net.onMessage = (from, m) => {
         Net.send(from, { t: 'floor', f: G.floor, seed: G.seed, sx: hp.x, sz: hp.z, go: 1 });
       }
     } else if (m.t === 'stats') Sim.setStats(from, m.st);
+    else if (m.t === 'buff') Sim.buff(from, m.k); // battle potion drunk on a guest's phone
   } else {
     if (m.t === 's') {
       if (m.fl !== G.floor || !G.inGame) return;
@@ -776,7 +781,7 @@ function trySpecial() {
 }
 function tryDodge() {
   if (me.downed || me.dodgeCd > 0 || !G.inGame) return;
-  me.dodgeCd = COOLDOWN.dodge; me.dodgeT = 0.22;
+  me.dodgeCd = rollCooldown(Profile.boosts); me.dodgeT = 0.22;
   me.dodgeA = (Math.abs(me.mx) + Math.abs(me.mz) > 0.1) ? Math.atan2(me.mx, me.mz) : me.f;
   me.dn++;
 }
@@ -814,7 +819,7 @@ function updateMe(dt) {
   if (me.downed) { mx = mz = 0; me.dodgeT = me.dashT = 0; }
   me.mx = mx; me.mz = mz;
   const it = equipped(), W = WEAPONS[it.w];
-  const spd = 7.2 * (input.atk && W.kind !== 'melee' ? 0.7 : 1);
+  const spd = 7.2 * (input.atk && W.kind !== 'melee' ? 0.7 : 1) * (myBuffLeft('swift') > 0 ? 1.3 : 1);
   if (me.dodgeT > 0) { me.dodgeT -= dt; moveCircle(G.map, me, Math.sin(me.dodgeA) * 21 * dt, Math.cos(me.dodgeA) * 21 * dt, 0.4); }
   else if (me.dashT > 0) { me.dashT -= dt; moveCircle(G.map, me, Math.sin(me.dashA) * 40 * dt, Math.cos(me.dashA) * 40 * dt, 0.4); }
   else moveCircle(G.map, me, mx * spd * dt, mz * spd * dt, 0.4);
@@ -881,6 +886,7 @@ function loop(now) {
     updateFx(dt);
     updateCamera(dt);
     updateHUD(dt);
+    updateShop(dt);
     if (saveT > 0) { saveT -= dt; if (saveT <= 0) saveProfile(); }
   } else {
     // idle menu backdrop: slow orbit
