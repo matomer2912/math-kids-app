@@ -117,6 +117,37 @@ function isPropSkin(sk) { return PROP_SKINS.has(typeof sk === 'number' ? SKINS[s
 // shared mob skins for the new archetypes (their colors come from the theme)
 const NEW_MOBS = { slime: 'slime', charger: 'charger', shield: 'guard', bomber: 'bomber', mage: 'mage', totem: 'totem', egg: 'egg' };
 
+// ---------- champion packs: a rare named mini-boss with a pack of minions ----------
+// Champion code `cc` (static snapshot data, see Sim.snapshot): bit 0 champion, bit 1 pack minion,
+// bits 2.. the champion's affixes (bit 2 + index into CHAMP_AFFIXES; minions carry their leader's).
+// The affix INDEX is sent over the network: only ever append.
+const CHAMP_AFFIXES = [
+  { id: 'swift',  label: 'Swift',    icon: '💨', color: 0x46e0ff, css: '#6ae8ff', desc: 'moves and attacks faster',
+    ep: ['the Quick', 'Zoomfoot', 'the Speedy'] },
+  { id: 'iron',   label: 'Ironhide', icon: '🛡️', color: 0xbfd2e6, css: '#d4e2f0', desc: 'takes less damage',
+    ep: ['the Ironhide', 'Stoneskin', 'the Unbreakable'] },
+  { id: 'vamp',   label: 'Vampiric', icon: '🩸', color: 0xff2a4a, css: '#ff5a70', desc: 'heals when it hits you',
+    ep: ['the Vampire', 'Lifestealer', 'the Hungry'] },
+  { id: 'frenzy', label: 'Frenzy',   icon: '😡', color: 0xff8a1a, css: '#ffa040', desc: 'gets faster when hurt',
+    ep: ['the Furious', 'the Grumpy', 'Ragebeard'] },
+  { id: 'shock',  label: 'Shocking', icon: '⚡', color: 0xfff04a, css: '#fff27a', desc: 'zaps the ground around it',
+    ep: ['the Zapper', 'Thunderfist', 'the Sparky'] },
+  { id: 'summon', label: 'Summoner', icon: '📯', color: 0xb46aff, css: '#c48aff', desc: 'calls more friends when hurt',
+    ep: ['the Bossy', 'Packleader', 'the Loud'] },
+];
+const CHAMP_NAMES = ['Grax', 'Kronk', 'Zorg', 'Bumble', 'Mog', 'Snarl', 'Vex', 'Drog', 'Tusk', 'Nibbs', 'Gloop', 'Brak',
+  'Rumble', 'Grimble', 'Thud', 'Wobbo', 'Gnash', 'Krunch', 'Borg', 'Snagg', 'Moldo', 'Grubb', 'Zilch', 'Huff'];
+const CHAMP_IDX = {}; CHAMP_AFFIXES.forEach((a, i) => CHAMP_IDX[a.id] = i);
+const champAffixes = cc => CHAMP_AFFIXES.filter((a, i) => (cc >> 2) & (1 << i));
+const champHas = (cc, id) => !!((cc >> 2) & (1 << CHAMP_IDX[id]));
+// pack colour = the colour of the leader's first affix (minions share it, so a pack reads as a group)
+function champColor(cc) { const a = champAffixes(cc)[0]; return a ? a.color : 0xff5a2a; }
+// name from the enemy id (same on host and guests, nothing to send): "Grax the Ironhide"
+function champName(id, cc) {
+  const r = RNG((id * 2654435761) ^ 0x5bd1e995), a = champAffixes(cc)[0] || CHAMP_AFFIXES[0];
+  return r.pick(CHAMP_NAMES) + ' ' + r.pick(a.ep);
+}
+
 // Worlds. Each world = 3 floors, the 3rd is the boss floor.
 //  pit: non-walkable chasm / lava / water look   slow: sticky floor patches (slows everyone)
 //  pattern: floor tiles   walls: wall decoration style   traps: which traps appear   light: torch flame color
