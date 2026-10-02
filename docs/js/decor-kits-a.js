@@ -54,7 +54,7 @@ Object.assign(DPROP, {
       }
       b.box(shade(c, 0.85), w * 0.7, 0.08, w * 0.7, x, 0, z, { g: 0.3 });
       b.box(c, w, h, w, x, 0.08, z, { g: 0.3 });
-      b.box(P.gold, w + 0.05, 0.07, w + 0.05, x, 0.08 + h * 0.62, z, { g: 0 });
+      b.box(P.gold, w + 0.08, 0.07, w + 0.08, x, 0.08 + h * 0.62, z, { g: 0 });
       b.box(shade(c, 0.9), w * 0.55, 0.14, w * 0.55, x, 0.08 + h, z, { g: 0.1 });
       b.box(shade(c, 1.1), w * 0.72, 0.06, w * 0.72, x, 0.22 + h, z, { g: 0 });
       if (r() < 0.3) b.box(P.lapis, w * 0.35, 0.12, 0.02, x, 0.08 + h * 0.35, z + w / 2 + 0.01, { g: 0 });
@@ -68,8 +68,8 @@ Object.assign(DPROP, {
     b.box(P.lapis, 0.44, 0.08, 0.44, 0, 0.36 + (h - 0.36) * 0.6, 0, { g: 0 });
     b.box(P.gold2, 0.62, 0.1, 0.62, 0, h, 0, { g: 0.2 });
     b.box(P.gold, 0.8, 0.18, 0.8, 0, h + 0.1, 0, { g: 0.15 });
-    b.box(P.ember, 0.62, 0.05, 0.62, 0, h + 0.27, 0, { e: 1 });
-    const y = h + 0.3;
+    b.box(P.ember, 0.62, 0.06, 0.62, 0, h + 0.29, 0, { e: 1 });
+    const y = h + 0.32;
     b.flame(0, y + 0.18, 0, 0.36, 0.44, P.fire, P.fire2); b.flame(0.13, y + 0.1, 0.06, 0.2, 0.28, P.fire, P.fire2); b.flame(-0.12, y + 0.1, -0.06, 0.18, 0.26, P.fire, P.fire2);
     b.glow(0, 0, 0.05, 0.4, 6.8, 6.0, P.fire, 0.45, 0.12);
     b.glow(2, 0, y + 0.3, 0.3, 2.4, 2.4, P.fire, 0.6, 0.18);
@@ -94,8 +94,8 @@ Object.assign(DPROP, {
     // the head, lying on its side in front
     b.push(0.55, 0, 0.75, -0.6 + r() * 0.4, 1);
     b.box(P.gold, 0.62, 0.5, 0.55, 0, 0, 0, { rz: 0.25, g: 0.2 });
-    b.box(P.lapis, 0.64, 0.08, 0.57, 0, 0.14, 0, { rz: 0.25, g: 0 });
-    b.box(P.lapis, 0.64, 0.08, 0.57, 0, 0.3, 0, { rz: 0.25, g: 0 });
+    b.box(P.lapis, 0.68, 0.08, 0.61, 0, 0.14, 0, { rz: 0.25, g: 0 });
+    b.box(P.lapis, 0.68, 0.08, 0.61, 0, 0.3, 0, { rz: 0.25, g: 0 });
     b.box(djit(P.stone, r, 0.04), 0.4, 0.4, 0.12, 0.02, 0.04, 0.3, { rz: 0.25, g: 0.1 });
     b.box(P.glyph, 0.08, 0.05, 0.02, -0.06, 0.24, 0.37, { rz: 0.25, g: 0 }); b.box(P.glyph, 0.08, 0.05, 0.02, 0.1, 0.28, 0.37, { rz: 0.25, g: 0 });
     b.pop();
@@ -154,9 +154,9 @@ Object.assign(DPROP, {
     for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
       if (r() < 0.15) continue;
       const gx = -0.46 + col * 0.31, gy = y0 + 0.1 + row * (ph - 0.12) / rows, k = r(), c = k < 0.2 ? P.lapis : k < 0.32 ? P.gold : P.glyph;
-      if (k < 0.45) { b.box(c, 0.07, 0.22, 0.03, gx, gy, 0.065, { g: 0 }); b.box(c, 0.13, 0.06, 0.03, gx, gy + 0.18, 0.066, { g: 0 }); }   // standing figure
-      else if (k < 0.7) { b.box(c, 0.16, 0.08, 0.03, gx, gy + 0.04, 0.065, { g: 0 }); b.box(c, 0.05, 0.12, 0.03, gx + 0.06, gy + 0.1, 0.066, { g: 0 }); }   // bird
-      else if (k < 0.85) { b.box(c, 0.18, 0.05, 0.03, gx, gy + 0.08, 0.065, { g: 0 }); b.box(P.glyph, 0.06, 0.06, 0.03, gx, gy + 0.065, 0.068, { g: 0 }); }  // eye
+      if (k < 0.45) { b.box(c, 0.07, 0.22, 0.03, gx, gy, 0.065, { g: 0 }); b.box(c, 0.13, 0.06, 0.03, gx, gy + 0.18, 0.1, { g: 0 }); }   // standing figure
+      else if (k < 0.7) { b.box(c, 0.16, 0.08, 0.03, gx, gy + 0.04, 0.065, { g: 0 }); b.box(c, 0.05, 0.12, 0.03, gx + 0.06, gy + 0.1, 0.1, { g: 0 }); }   // bird
+      else if (k < 0.85) { b.box(c, 0.18, 0.05, 0.03, gx, gy + 0.08, 0.065, { g: 0 }); b.box(P.glyph, 0.06, 0.06, 0.03, gx, gy + 0.065, 0.1, { g: 0 }); }  // eye
       else b.box(c, 0.12, 0.12, 0.03, gx, gy + 0.03, 0.065, { rz: 0.785, g: 0 });   // sun disc
     }
     if (r() < 0.35) { b.box(P.gold, 0.14, 0.14, 0.03, 0, y0 + ph - 0.24, 0.07, { rz: 0.785, e: 1 }); b.glow(2, 0, y0 + ph - 0.18, 0.2, 0.8, 0.8, P.gold, 0.22, 0.04); }
@@ -172,10 +172,10 @@ Object.assign(DPROP, {
   jackal(b, r, P) {      // seated black jackal guardian with a gold collar, on a little plinth (wall tops)
     const st = djit(P.stone, r, 0.05), bk = P.jackal;
     b.box(shade(st, 0.85), 0.9, 0.22, 1.0, 0, 0, 0, { g: 0.3 });
-    b.box(P.gold, 0.92, 0.06, 1.02, 0, 0.22, 0, { g: 0 });
+    b.box(P.gold, 0.96, 0.06, 1.06, 0, 0.22, 0, { g: 0 });
     b.box(bk, 0.48, 0.32, 0.8, 0, 0.28, -0.05, { g: 0.2 });               // haunches
     b.box(bk, 0.36, 0.62, 0.34, 0, 0.5, 0.16, { rx: -0.12, g: 0.15 });    // chest
-    b.box(P.gold, 0.38, 0.08, 0.36, 0, 0.92, 0.2, { rx: -0.12, g: 0 });   // collar
+    b.box(P.gold, 0.42, 0.08, 0.4, 0, 0.92, 0.2, { rx: -0.12, g: 0 });     // collar
     b.box(bk, 0.3, 0.3, 0.32, 0, 1.0, 0.24, { g: 0.1 });                  // head
     b.box(bk, 0.16, 0.14, 0.24, 0, 1.06, 0.48, { g: 0 });                 // snout
     b.box(bk, 0.08, 0.26, 0.08, -0.1, 1.28, 0.18, { g: 0 }); b.box(bk, 0.08, 0.26, 0.08, 0.1, 1.28, 0.18, { g: 0 });   // ears
@@ -202,7 +202,7 @@ Object.assign(DPROP, {
   },
   goldPile(b, r, P) {    // a little treasure heap: coins, an ingot, a jewelled cup
     dkaMound(b, r, [P.gold, P.gold2, P.gold], 0.7, 0.18, 0, 0, 0, 3);
-    for (let s = 0; s < 6; s++) b.box(r() < 0.5 ? P.gold : P.gold2, 0.12, 0.03, 0.12, (r() - 0.5) * 0.9, 0, (r() - 0.5) * 0.6, { ry: r() * 3, g: 0 });
+    for (let s = 0; s < 6; s++) b.box(r() < 0.5 ? P.gold : P.gold2, 0.12, 0.03 + (s % 3) * 0.035, 0.12, (r() - 0.5) * 0.9, 0, (r() - 0.5) * 0.6, { ry: r() * 3, g: 0 });
     b.box(P.gold, 0.3, 0.1, 0.16, 0.3, 0, 0.15, { ry: r(), g: 0.1 });
     if (r() < 0.6) { b.box(P.gold, 0.14, 0.22, 0.14, -0.25, 0, 0.1, { g: 0.1 }); b.box(P.lapis, 0.06, 0.06, 0.02, -0.25, 0.12, 0.18, { g: 0 }); }
     b.box(P.gold, 0.06, 0.06, 0.06, 0.05, 0.22, 0.02, { e: 1 });
@@ -230,8 +230,8 @@ Object.assign(DPROP, {
     b.box(P.magma, 0.04, h * 0.6, 0.02, 0.12, 0.3, 0.28, { rz: 0.3, e: 1 });
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) b.box(P.iron, 0.08, 0.5, 0.08, sx * 0.3, h, sz * 0.3, { rx: -sz * 0.25, rz: sx * 0.25, g: 0 });
     b.box(P.iron, 0.86, 0.12, 0.86, 0, h + 0.42, 0, { g: 0.2 });
-    b.box(P.hot, 0.66, 0.06, 0.66, 0, h + 0.5, 0, { e: 1 });
-    const y = h + 0.55;
+    b.box(P.hot, 0.66, 0.08, 0.66, 0, h + 0.52, 0, { e: 1 });
+    const y = h + 0.6;
     b.flame(0, y + 0.2, 0, 0.4, 0.5, P.fire, P.fire2); b.flame(0.14, y + 0.12, 0.08, 0.22, 0.32, P.fire, P.fire2); b.flame(-0.14, y + 0.1, -0.06, 0.2, 0.28, P.fire, P.fire2);
     b.glow(0, 0, 0.05, 0.4, 7.0, 6.4, P.fire, 0.5, 0.12);
     b.glow(2, 0, y + 0.3, 0.3, 2.6, 2.6, P.fire, 0.65, 0.18);
@@ -258,7 +258,7 @@ Object.assign(DPROP, {
       const seg = 3 + Math.floor(r() * 3);
       for (let s = 0; s < seg && y > -H + 0.2; s++) {
         const L = 0.25 + r() * 0.35, a = (r() - 0.5) * 1.1;
-        b.box(s & 1 ? P.magma : P.magma2, 0.07 + r() * 0.04, L, 0.03, x, y - L, 0.02, { rz: a, e: 1 });
+        b.box(s & 1 ? P.magma : P.magma2, 0.07 + r() * 0.04, L, 0.03, x, y - L, 0.02 + (s & 1) * 0.035, { rz: a, e: 1 });
         x += Math.sin(a) * L; y -= Math.cos(a) * L;
       }
     }
@@ -288,14 +288,14 @@ Object.assign(DPROP, {
       b.box(djit(dpick(P.stones, r), r, 0.1), w, w * (0.5 + r() * 0.5), w * (0.7 + r() * 0.5), x, 0, z, { ry: r() * 3, g: 0.35 });
     }
     if (r() < 0.85) {   // still-molten seams between the chunks
-      for (let s = 0; s < 2; s++) b.box(s ? P.magma2 : P.magma, 0.4 + r() * 0.3, 0.03, 0.06, (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.35, { ry: r() * 3, e: 1 });
+      for (let s = 0; s < 2; s++) b.box(s ? P.magma2 : P.magma, 0.4 + r() * 0.3, 0.03 + s * 0.035, 0.06, (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.35, { ry: r() * 3, e: 1 });
       b.glow(0, 0, 0.04, 0, 2.2, 2.0, P.magma, 0.3, 0.06);
     }
   },
   ashPile(b, r, P) { dkaMound(b, r, P.ashCols, 0.9 + r() * 0.5, 0.22 + r() * 0.14, 0, 0, 0, 3); if (r() < 0.5) b.box(P.hot, 0.08, 0.04, 0.08, (r() - 0.5) * 0.3, 0.1, (r() - 0.5) * 0.2, { e: 1 }); },
   crust(b, r, P) {       // dark crust plates floating on the magma
     const n = 2 + Math.floor(r() * 3);
-    for (let s = 0; s < n; s++) { const w = 0.4 + r() * 0.6; b.box(djit(dpick(P.stones, r), r, 0.1), w, 0.08 + s * 0.02, w * (0.6 + r() * 0.4), (r() - 0.5) * 1.4, -0.03, (r() - 0.5) * 1.4, { ry: r() * 3, g: 0.2 }); }
+    for (let s = 0; s < n; s++) { const w = 0.4 + r() * 0.6; b.box(djit(dpick(P.stones, r), r, 0.1), w, 0.08 + s * 0.04, w * (0.6 + r() * 0.4), (r() - 0.5) * 1.4, -0.03, (r() - 0.5) * 1.4, { ry: r() * 3, g: 0.2 }); }
     if (r() < 0.5) b.mote(2, 0, 0.1, 0, P.ember, 0.12, 0.7 + r() * 0.6);
   },
   obsidianSpire(b, r, P) {   // jagged black spires with magma veins beyond the walls
@@ -312,7 +312,7 @@ Object.assign(DPROP, {
     b.box(shade(P.basalt, 0.9), 0.95, 0.16, 0.95, 0, 0, 0, { g: 0.3 });
     b.box(P.iron, 0.8, h, 0.8, 0, 0.16, 0, { g: 0.25 });
     b.box(P.iron2, 0.9, 0.1, 0.9, 0, 0.16 + h, 0, { g: 0 });
-    b.box(P.hot, 0.66, 0.04, 0.66, 0, 0.2 + h, 0, { e: 1 });
+    b.box(P.hot, 0.66, 0.06, 0.66, 0, 0.27 + h, 0, { e: 1 });
     b.box(P.iron, 0.08, 0.08, 0.3, 0.46, 0.16 + h * 0.6, 0, { g: 0 }); b.box(P.iron, 0.08, 0.08, 0.3, -0.46, 0.16 + h * 0.6, 0, { g: 0 });
     b.box(P.magma, 0.12, 0.3, 0.04, 0.2, 0.16 + h - 0.26, 0.415, { e: 1 });
     b.glow(0, 0, 0.05, 0.2, 4.5, 4.5, P.magma, 0.4, 0.08);
@@ -420,7 +420,7 @@ Object.assign(DPROP, {
   },
   iceFloe(b, r, P) {     // flat ice plates drifting on the dark water
     const n = 2 + Math.floor(r() * 3);
-    for (let s = 0; s < n; s++) { const w = 0.4 + r() * 0.7; b.box(djit(r() < 0.5 ? P.snow : P.ice, r, 0.05), w, 0.08 + s * 0.02, w * (0.6 + r() * 0.4), (r() - 0.5) * 1.4, -0.02, (r() - 0.5) * 1.4, { ry: r() * 3, g: 0.1 }); }
+    for (let s = 0; s < n; s++) { const w = 0.4 + r() * 0.7; b.box(djit(r() < 0.5 ? P.snow : P.ice, r, 0.05), w, 0.08 + s * 0.04, w * (0.6 + r() * 0.4), (r() - 0.5) * 1.4, -0.02, (r() - 0.5) * 1.4, { ry: r() * 3, g: 0.1 }); }
   },
   columnDressI(b, r, P) {  // dungeon.js column: ice sheath, snow on the capital, icicles, a drift at the foot
     b.box(P.ice, 1.0, 1.1, 1.0, 0, 0.3, 0, { g: 0.15 });
