@@ -35,7 +35,8 @@ let bannerTimer = null;
 function showBanner(big, small) {
   $('center').innerHTML = big + (small ? '<small>' + small + '</small>' : '');
   clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => { if (!me.downed) $('center').innerHTML = ''; }, 2600);
+  // longer second lines (e.g. a champion's powers explained) stay up long enough for kids to read
+  bannerTimer = setTimeout(() => { if (!me.downed) $('center').innerHTML = ''; }, small && small.length > 40 ? 5000 : 2600);
 }
 
 // ---------- host side ----------
