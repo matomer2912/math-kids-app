@@ -629,8 +629,9 @@ function buildLevel(map, theme) {
       if (!ver && !hz) { /* junction: no runner */ }
       else if (deco === 'desert') A.add(0xf2dfa8, sx, 0.02, sz, x, 0.015, z);
       else if (deco !== 'jungle' && deco !== 'ice') {
-        L.add(theme.carpet2, sx + (ver ? 0.16 : 0), 0.025, sz + (hz && !ver ? 0.16 : 0), x, 0.012, z);
-        L.add(theme.carpet, sx - (ver ? 0.1 : 0), 0.03, sz - (hz && !ver ? 0.1 : 0), x, 0.016, z);
+        // y is the box centre: trim top at 0.03, carpet top at 0.06 (layers 0.03 apart -> no z-fighting)
+        L.add(theme.carpet2, sx + (ver ? 0.16 : 0), 0.06, sz + (hz ? 0.16 : 0), x, 0.0, z);
+        L.add(theme.carpet, sx - (ver ? 0.1 : 0), 0.12, sz - (hz ? 0.1 : 0), x, 0.0, z);
       }
     }
     // slow terrain overlays
@@ -943,12 +944,14 @@ function buildLevel(map, theme) {
 
 // Animate traps, lava, torches, shrines. Call every frame with t = Date.now() / 1000 (same clock as the host's trap damage).
 const _wc = new THREE.Color();
+const _spikeHot = new THREE.Color(0xff5a2a);
 function animateLevel(level, t) {
   const A = level && level.userData.anim; if (!A) return;
   for (const s of A.spikes) {
     const st = spikeState(s.q, t);
     s.spikes.position.y = st === 0 ? -0.5 : st === 1 ? -0.22 + 0.04 * Math.sin(t * 40) : 0.42;
-    s.plate.material.color.setHex(st === 1 ? ((t * 8) & 1 ? 0xff5a2a : 0x8a3a2a) : st === 2 ? 0xa02a20 : 0x55555c);
+    if (st === 1) s.plate.material.color.setHex(0x8a3a2a).lerp(_spikeHot, 0.5 + 0.5 * Math.sin(t * 14));
+    else s.plate.material.color.setHex(st === 2 ? 0xa02a20 : 0x55555c);
     s.spikes.material.color.setHex(st === 2 ? 0xff6a5a : 0xd8d8d8);
   }
   for (const v of A.vents) {
