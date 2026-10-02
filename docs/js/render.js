@@ -132,7 +132,8 @@ function syncVisuals(dt) {
         ring.rotation.x = -Math.PI / 2; ring.position.y = 0.12; model.root.add(ring);
       }
       scene.add(o.obj); vis.set(key, o); prepModel(o.obj);
-      if (e.sk !== 'boss' && !isPropSkin(e.sk)) { o.bar = makeBar(); o.bar.visible = false; scene.add(o.bar); }
+      if (e.cc) champDecorate(o, e); // champion pack: aura, name tag, affix effects (champion has the big top bar instead)
+      if (e.sk !== 'boss' && !isPropSkin(e.sk) && !(e.cc & 1)) { o.bar = makeBar(); o.bar.visible = false; scene.add(o.bar); }
     }
     o.seen = visFrame; o.seenT = T;
     o.px = o.x; o.pz = o.z;
@@ -153,6 +154,7 @@ function syncVisuals(dt) {
         o.tint = tint;
       }
     }
+    if (o.ch) champTick(o, e, dt, T, spd);
     if (o.bar) {
       o.bar.visible = e.hp < 100;
       o.bar.position.set(o.x, 2.4 * (e.size || 1) + 0.3, o.z);
@@ -400,7 +402,7 @@ function handleEvent(a) {
     case 'revived': { const pp = playerPos(a[1]); if (pp) ringFx(pp.x, pp.z, 2.5, 0x66ff88); sfx('heal'); break; }
     case 'heal': { const pp = playerPos(a[1]); if (pp) ringFx(pp.x, pp.z, 1.8, 0x66ff88); if (a[1] === G.myId) sfx('heal'); break; }
     case 'pick': if (a[1] === G.myId && a[2] === 'heart') sfx('heal'); break;
-    case 'msg': showBanner(a[1]); break;
+    case 'msg': showBanner(a[1], a[2]); break;
     case 'bossdead': sfx('fanfare'); vibrate(150); break;
     case 'shake': G.shake = Math.max(G.shake, a[1]); break;
     case 'special': sfx('special'); break;
@@ -414,6 +416,139 @@ function handleEvent(a) {
     case 'block': blockFx(a[1], a[2]); break;
     case 'buff': case 'phoenix': shopEvent(a); break;
   }
+}
+
+// ---------- champion packs (Sim champion code `cc`, CHAMP_AFFIXES in data.js) ----------
+// Champion: pulsing ground ring + spinning dashes + glow pool + a column of light in the pack colour, a crown
+// of gems circling its head (one per affix, in the affix colour), a floating name tag with its affixes, and
+// one effect per affix. Minions: a smaller ring in the same colour (pulsing in sync), so the pack reads as a
+// group. All ground parts sit above the floor dressing (y >= 0.1).
+const shareGpu = r => { r.userData.shared = true; return r; };
+const CHAMP_RING = shareGpu(new THREE.RingGeometry(0.85, 1.05, 40));
+const CHAMP_MRING = shareGpu(new THREE.RingGeometry(0.66, 0.86, 28));
+const CHAMP_ARC = shareGpu(new THREE.RingGeometry(1.18, 1.32, 5, 1, 0, Math.PI / 5));
+const CHAMP_GEM = shareGpu(new THREE.OctahedronGeometry(0.16));
+const CHAMP_COL = (() => { // open cylinder, bright at the floor and fading out upwards (additive)
+  const g = new THREE.CylinderGeometry(0.8, 0.95, 1, 24, 1, true); g.translate(0, 0.5, 0);
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const k = Math.pow(1 - p.getY(i), 1.6); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return shareGpu(g);
+})();
+const champMats = {}; // minion ring material per pack colour (shared: the whole pack pulses together)
+function champRingMat(col, op) { return new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide, transparent: true, opacity: op, depthWrite: false, toneMapped: false }); }
+function champDecorate(o, e) {
+  const cc = e.cc, col = champColor(cc), root = o.model.root, s = root.scale.x || 1;
+  const ch = o.ch = { lead: !!(cc & 1), aff: champAffixes(cc), ph: Math.random() * 6.28, fx: {}, hot: false };
+  const flat = (m, y) => { m.rotation.x = -Math.PI / 2; m.position.y = y / s; m.renderOrder = 3; root.add(m); return m; };
+  if (!ch.lead) { ch.ring = flat(new THREE.Mesh(CHAMP_MRING, champMats[col] || (champMats[col] = shareGpu(champRingMat(col, 0.8)))), 0.1); return; }
+  // (sizes in model units: parts live inside the scaled model root)
+  const h = ch.h = new THREE.Box3().setFromObject(root).max.y / s;
+  ch.ring = flat(new THREE.Mesh(CHAMP_RING, champRingMat(col, 0.95)), 0.11);
+  ch.arcs = new THREE.Group();
+  for (let i = 0; i < 6; i++) { const a = new THREE.Mesh(CHAMP_ARC, ch.ring.material); a.rotation.z = i * Math.PI / 3; ch.arcs.add(a); }
+  flat(ch.arcs, 0.12);
+  ch.pool = lootGlow(col, 5 / s, 0.7); ch.pool.position.y = 0.14 / s; root.add(ch.pool);
+  ch.col = new THREE.Mesh(CHAMP_COL, new THREE.MeshBasicMaterial({ color: col, vertexColors: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  ch.col.scale.set(1, h * 1.15, 1); ch.col.position.y = 0.1 / s; ch.col.renderOrder = 4; root.add(ch.col);
+  ch.gems = ch.aff.map(a => { const g = new THREE.Mesh(CHAMP_GEM, new THREE.MeshBasicMaterial({ color: a.color, toneMapped: false })); root.add(g); return g; });
+  const tag = ch.tag = champTag(champName(e.id, cc), ch.aff);
+  tag.position.y = h + 0.95 / s; tag.scale.set(4.4 / s, 1.1 / s, 1); root.add(tag);
+  if (champHas(cc, 'iron')) { // steel sheen: greyed, cool-glowing body (also what flashes / tints restore to)
+    const steel = new THREE.Color(0xaabbd0);
+    for (const m of o.model.mats) { m.color.lerp(steel, 0.45); m.emissive.setHex(0x1c2a3c); m.userData.e = 0x1c2a3c; }
+  }
+}
+// floating name + affix labels (one canvas texture per champion; freed with the model by gpuCollect)
+function champTag(name, aff) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
+  const g = cv.getContext('2d'), F = 'Lilita, "Arial Black", Impact, sans-serif';
+  g.textBaseline = 'middle'; g.lineJoin = 'round'; g.textAlign = 'center';
+  let fs = 50; g.font = fs + 'px ' + F;
+  while (g.measureText(name).width > 488 && fs > 28) { fs -= 2; g.font = fs + 'px ' + F; }
+  g.lineWidth = 9; g.strokeStyle = 'rgba(24,8,0,.92)'; g.strokeText(name, 256, 40);
+  g.fillStyle = '#ffe58a'; g.fillText(name, 256, 40);
+  g.font = '34px ' + F; g.textAlign = 'left'; g.lineWidth = 7;
+  const sep = '  ·  ', wSep = g.measureText(sep).width, ws = aff.map(a => g.measureText(a.label).width);
+  let x = 256 - (ws.reduce((a, b) => a + b, 0) + wSep * (aff.length - 1)) / 2;
+  aff.forEach((a, i) => {
+    if (i) { g.fillStyle = '#ffffff'; g.strokeText(sep, x, 98); g.fillText(sep, x, 98); x += wSep; }
+    g.strokeText(a.label, x, 98); g.fillStyle = a.css; g.fillText(a.label, x, 98); x += ws[i];
+  });
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true, fog: false, toneMapped: false }));
+  sp.renderOrder = 12;
+  return sp;
+}
+// small fading puff (affix effects); vy rise speed, sw swirl around (cx, cz) when set
+function champPuff(x, y, z, col, sz, life, vy, op, geo, sw) {
+  if (fxList.length > 150) return;
+  const m = new THREE.Mesh(geo || SPHG, basic(col, op));
+  m.position.set(x, y, z); m.scale.setScalar(sz);
+  const a0 = sw ? Math.atan2(x - sw.x, z - sw.z) : 0, r0 = sw ? Math.hypot(x - sw.x, z - sw.z) : 0;
+  addFx(m, life, (f, k, dt) => {
+    m.position.y += vy * dt; m.material.opacity = op * (1 - k); m.scale.setScalar(sz * (1 + k * 0.8));
+    if (sw) { const a = a0 + f.t * 3; m.position.x = sw.x + Math.sin(a) * r0; m.position.z = sw.z + Math.cos(a) * r0; m.rotation.y = a; }
+  });
+}
+function champSpark(x, z, s, h) { // little lightning crackle around a Shocking champion
+  const pts = [];
+  let px = x + (Math.random() - 0.5) * s * 1.6, py = (0.4 + Math.random() * h * 0.8) * s, pz = z + (Math.random() - 0.5) * s * 1.6;
+  for (let i = 0; i < 4; i++) { pts.push(new THREE.Vector3(px, py, pz)); px += (Math.random() - 0.5) * 0.7; py += (Math.random() - 0.5) * 0.6; pz += (Math.random() - 0.5) * 0.7; }
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xfff7a0, transparent: true, toneMapped: false }));
+  addFx(l, 0.14, (f, k) => { l.material.opacity = 1 - k; });
+}
+function champTick(o, e, dt, T, spd) {
+  const ch = o.ch;
+  if (!ch.lead) { ch.ring.material.opacity = 0.6 + 0.3 * Math.sin(T * 4); return; }
+  const t = T + ch.ph, s = o.model.root.scale.x || 1, h = ch.h;
+  ch.ring.material.opacity = 0.7 + 0.25 * Math.sin(t * 4);
+  ch.arcs.rotation.z = t * 1.3;
+  ch.col.material.opacity = 0.3 + 0.12 * Math.sin(t * 2.6);
+  ch.pool.scale.setScalar((5 / s) * (1 + 0.08 * Math.sin(t * 3)));
+  const n = ch.gems.length;
+  ch.gems.forEach((g, i) => { const a = t * 1.8 + i * 6.283 / n; g.position.set(Math.sin(a) * 0.5, h + 0.28 + 0.06 * Math.sin(t * 4 + i), Math.cos(a) * 0.5); g.rotation.y = t * 3; });
+  const fx = ch.fx, every = (k, iv) => { fx[k] = (fx[k] || 0) - dt; if (fx[k] > 0) return false; fx[k] = iv; return true; };
+  const x = o.x, z = o.z, hurt = e.hp < 50;
+  for (const a of ch.aff) {
+    switch (a.id) {
+      case 'swift': // cyan speed streaks left behind while running
+        if (spd > 1.2 && every('swift', 0.045)) champPuff(x - Math.sin(o.f) * 0.5 * s + (Math.random() - 0.5) * 0.6 * s, (0.3 + Math.random() * 1.3) * s, z - Math.cos(o.f) * 0.5 * s + (Math.random() - 0.5) * 0.6 * s, a.color, 0.14 * s, 0.35, 0, 0.7, BOXG);
+        break;
+      case 'iron': // steel glints
+        if (every('iron', 0.5)) champPuff(x + (Math.random() - 0.5) * 0.9 * s, (0.6 + Math.random() * (h - 0.8)) * s, z + (Math.random() - 0.5) * 0.9 * s, 0xffffff, 0.09 * s, 0.3, 0, 1, BOXG);
+        break;
+      case 'vamp': { // red mist curling round its feet
+        if (every('vamp', 0.12)) { const r = (0.5 + Math.random() * 0.5) * s, q = Math.random() * 6.28; champPuff(x + Math.sin(q) * r, 0.25 * s, z + Math.cos(q) * r, a.color, 0.28 * s, 1.0, 0.7, 0.4); }
+        break;
+      }
+      case 'frenzy': // below half health: angry pulsing glow + steam from its head
+        if (hurt && every('frenzy', 0.16)) champPuff(x + (Math.random() - 0.5) * 0.5 * s, (h + 0.1) * s, z + (Math.random() - 0.5) * 0.5 * s, a.color, 0.16 * s, 0.6, 1.6, 0.6, BOXG);
+        break;
+      case 'shock':
+        if (every('shock', 0.22)) champSpark(x, z, s, h);
+        break;
+      case 'summon': { // purple wisps spiralling up around it
+        if (every('summon', 0.2)) { const q = Math.random() * 6.28, r = 0.9 * s; champPuff(x + Math.sin(q) * r, 0.5 * s, z + Math.cos(q) * r, a.color, 0.12 * s, 1.2, 0.9, 0.85, BOXG, { x, z }); }
+        break;
+      }
+    }
+  }
+  // frenzied glow (the burn / slow tints and hit flashes win while active)
+  const hot = hurt && champHas(e.cc, 'frenzy') && !o.flashing && (o.tint === undefined || o.tint < 0);
+  if (hot) { const k = 0.5 + 0.5 * Math.sin(T * 10); for (const m of o.model.mats) { if (m.userData.e === undefined) m.userData.e = m.emissive.getHex(); m.emissive.setRGB(0.55 * k + 0.15, 0.12 * k, 0); } }
+  else if (ch.hot && !o.flashing && (o.tint === undefined || o.tint < 0)) for (const m of o.model.mats) if (m.userData.e !== undefined) m.emissive.setHex(m.userData.e);
+  ch.hot = hot;
+}
+// the champion the local hero is fighting (awake, close by) -> big top bar {name, hp%}
+function champBarInfo(v) {
+  let best = null, bd = 20 * 20;
+  for (const e of v.enemies) {
+    if (!(e.cc & 1) || !(e.fl & 32) || e.hp <= 0) continue;
+    const d = (e.x - me.x) ** 2 + (e.z - me.z) ** 2;
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best && { name: champName(best.id, best.cc) + ' ' + champAffixes(best.cc).map(a => a.icon).join(''), hp: best.hp };
 }
 
 // ---------- camera ----------
