@@ -423,17 +423,17 @@ function handleEvent(a) {
 // of gems circling its head (one per affix, in the affix colour), a floating name tag with its affixes, and
 // one effect per affix. Minions: a smaller ring in the same colour (pulsing in sync), so the pack reads as a
 // group. All ground parts sit above the floor dressing (y >= 0.1).
-const shareGpu = r => { r.userData.shared = true; return r; };
-const CHAMP_RING = shareGpu(new THREE.RingGeometry(0.85, 1.05, 40));
-const CHAMP_MRING = shareGpu(new THREE.RingGeometry(0.66, 0.86, 28));
-const CHAMP_ARC = shareGpu(new THREE.RingGeometry(1.18, 1.32, 5, 1, 0, Math.PI / 5));
-const CHAMP_GEM = shareGpu(new THREE.OctahedronGeometry(0.16));
+const champShared = r => { r.userData.shared = true; return r; };
+const CHAMP_RING = champShared(new THREE.RingGeometry(0.85, 1.05, 40));
+const CHAMP_MRING = champShared(new THREE.RingGeometry(0.66, 0.86, 28));
+const CHAMP_ARC = champShared(new THREE.RingGeometry(1.18, 1.32, 5, 1, 0, Math.PI / 5));
+const CHAMP_GEM = champShared(new THREE.OctahedronGeometry(0.16));
 const CHAMP_COL = (() => { // open cylinder, bright at the floor and fading out upwards (additive)
   const g = new THREE.CylinderGeometry(0.8, 0.95, 1, 24, 1, true); g.translate(0, 0.5, 0);
   const p = g.attributes.position, c = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) { const k = Math.pow(1 - p.getY(i), 1.6); c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k; }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-  return shareGpu(g);
+  return champShared(g);
 })();
 const champMats = {}; // minion ring material per pack colour (shared: the whole pack pulses together)
 function champRingMat(col, op) { return new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide, transparent: true, opacity: op, depthWrite: false, toneMapped: false }); }
@@ -441,7 +441,7 @@ function champDecorate(o, e) {
   const cc = e.cc, col = champColor(cc), root = o.model.root, s = root.scale.x || 1;
   const ch = o.ch = { lead: !!(cc & 1), aff: champAffixes(cc), ph: Math.random() * 6.28, fx: {}, hot: false };
   const flat = (m, y) => { m.rotation.x = -Math.PI / 2; m.position.y = y / s; m.renderOrder = 3; root.add(m); return m; };
-  if (!ch.lead) { ch.ring = flat(new THREE.Mesh(CHAMP_MRING, champMats[col] || (champMats[col] = shareGpu(champRingMat(col, 0.8)))), 0.1); return; }
+  if (!ch.lead) { ch.ring = flat(new THREE.Mesh(CHAMP_MRING, champMats[col] || (champMats[col] = champShared(champRingMat(col, 0.8)))), 0.1); return; }
   // (sizes in model units: parts live inside the scaled model root)
   const h = ch.h = new THREE.Box3().setFromObject(root).max.y / s;
   ch.ring = flat(new THREE.Mesh(CHAMP_RING, champRingMat(col, 0.95)), 0.11);
@@ -476,7 +476,7 @@ function champTag(name, aff) {
     g.strokeText(a.label, x, 98); g.fillStyle = a.css; g.fillText(a.label, x, 98); x += ws[i];
   });
   const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true, fog: false, toneMapped: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true, toneMapped: false })); // fades in the fog far away
   sp.renderOrder = 12;
   return sp;
 }

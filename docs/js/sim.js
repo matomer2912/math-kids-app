@@ -248,14 +248,14 @@ const Sim = (() => {
     return best;
   }
   const champPackSize = () => 1 + Math.min(8, Math.round(R.int(4, 6) * coopN()));
-  function champAffixRoll(f, type) {
+  function champAffixRoll(f) {
     const n = f >= 12 ? 2 : f >= 5 && R() < 0.5 ? 2 : 1;
     let bits = 0;
     for (let k = 0; k < n; k++) {
       const ok = CHAMP_AFFIXES.map((a, i) => i).filter(i => {
         if (bits & (1 << i)) return false;
         const id = CHAMP_AFFIXES[i].id, has = x => !!(bits & (1 << CHAMP_IDX[x]));
-        if (id === 'iron' && (type === 'shield' || has('vamp'))) return false; // no unkillable combos
+        if (id === 'iron' && has('vamp')) return false; // no unkillable combos
         if (id === 'vamp' && has('iron')) return false;
         return true;
       });
@@ -274,7 +274,7 @@ const Sim = (() => {
   function spawnPack(r, nMin) {
     const f = S.floor, map = S.map, ri = map.rooms.indexOf(r);
     const type = R() < 0.3 ? 'brute' : f >= 4 && R() < 0.3 ? 'charger' : 'grunt'; // (no shield-bearers: flanking a big one is no fun)
-    const aff = champAffixRoll(f, type);
+    const aff = champAffixRoll(f);
     const big = type === 'brute' ? 1.3 : 1.6, rad = ENEMIES[type].r * big;
     let c = { x: (r.x + r.w / 2) * TILE, z: (r.y + r.h / 2) * TILE };
     if (!packSpotOk(c.x, c.z, rad, ri)) { c = null; for (let t = 0; t < 30 && !c; t++) { const s = freeSpotIn(r, 2.5, rad); if (s && packSpotOk(s.x, s.z, rad, ri)) c = s; } }
@@ -332,7 +332,7 @@ const Sim = (() => {
     for (const o of S.enemies) if (o.pack === id && o.hp > 0) { o.awake = true; if (o.cc & 1) L = o; }
     if (!L || L.seen) return;
     L.seen = true;
-    ev('msg', '⚠️ ' + champName(L.id, L.cc) + ' appears!', champAffixes(L.cc).map(a => a.icon + ' ' + a.label).join(' · '));
+    ev('msg', '⚠️ ' + champName(L.id, L.cc) + ' appears!', champAffixes(L.cc).map(a => a.icon + ' ' + a.label + ': ' + a.desc).join('<br>'));
     ev('sfx', 'roar'); ev('shake', 0.3); ev('ring', r1(L.x), r1(L.z), 5, champColor(L.cc));
   }
   // awake champion: affixes that act on their own (frenzy, summoner, shocking)
@@ -1039,7 +1039,7 @@ const Sim = (() => {
       if (dist <= reach && e.cd <= 0 && (near || losTo(e, tp))) {
         e.st = 'wind'; e.t = d.wind * (e.elite ? 0.85 : champ ? 1.15 : 1); e.f = e.type === 'shield' ? e.f : ang; // champions wind up a bit longer: big hits, clear tell
         if (e.type === 'boomer') ev('sfx', 'fuse');
-        if (e.type === 'brute') { const off = 1.6 * (e.reach || 1), fx = e.x + Math.sin(e.f) * off, fz = e.z + Math.cos(e.f) * off; ev('tele', r1(fx), r1(fz), 2.8 * (champ ? 1.15 : 1), e.t); }
+        if (e.type === 'brute') { const off = 1.6 * (e.reach || 1), fx = e.x + Math.sin(e.f) * off, fz = e.z + Math.cos(e.f) * off; ev('tele', r1(fx), r1(fz), 2.8 * (champ ? 1.15 : 1), champ ? e.t : d.wind); }
       }
     }
   }
