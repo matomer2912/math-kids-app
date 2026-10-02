@@ -624,7 +624,7 @@ const VFX = (() => {
   const api = {
     on: true,
     stats: { p: 0, q: 0, r: 0 },
-    _dbg: { RB, P },
+    _dbg: { RB, P }, // test hook (screenshot harness times captures on the ribbons)
     // every game event (render.js handleEvent); legacy visuals are skipped by render.js where VFX draws them
     onEvent(a) {
       if (!api.on || !G.view) return;
