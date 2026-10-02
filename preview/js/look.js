@@ -239,12 +239,14 @@ const LOOK_MIST = `
 #ifndef LOOK_LOW
 if (uLkMist.x > 0.0) {
   float hm = 1.0 - smoothstep(uLkMist.y, uLkMist.z, vLkW.y);              // deep: pits fill with mist
+  hm *= 1.0 - 0.8 * smoothstep(-1.2, -3.6, vLkW.y);                       // ...but only a veil near the rim, not a flat 'floor'
   float band = 1.0 - smoothstep(-0.2, uLkMist.z, vLkW.y);                  // low band over floors / wall feet
   float n = 0.6 * texture2D(uLkNoise, vLkW.xz * 0.03 + uLkTime * vec2(0.012, 0.005)).r + 0.4 * texture2D(uLkNoise, vLkW.xz * 0.08 - uLkTime * vec2(0.007, 0.014)).r;
   float mf = uLkMist.x * max(hm * hm, band * (0.12 + 0.75 * smoothstep(0.42, 0.78, n)));
   gl_FragColor.rgb = mix(gl_FragColor.rgb, uLkMistC, clamp(mf, 0.0, 0.92));
 }
 #endif
+gl_FragColor.rgb *= 1.0 - 0.9 * smoothstep(-1.2, -4.2, vLkW.y);              // abyss: deep chasms fade to black (water pits are shallow)
 #include <tonemapping_fragment>`;
 const LOOK_LIGHTS = THREE.ShaderChunk.lights_fragment_begin
   .replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0')

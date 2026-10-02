@@ -24,12 +24,13 @@ function decorMats() {
   if (_dMats) return _dMats;
   // lit props: Lambert + vertex colours, skip the point-light loop like other level geometry, gentle sway
   const lit = new THREE.MeshLambertMaterial({ vertexColors: true });
-  lit.onBeforeCompile = sh => {
-    sh.uniforms.uTime = DECOR_U.uTime;
-    sh.vertexShader = 'uniform float uTime;\nattribute float aSway;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  const SWAY = `#include <begin_vertex>
       { float ph = transformed.x * 0.45 + transformed.z * 0.31;
         transformed.x += aSway * (0.6 * sin(uTime * 1.6 + ph) + 0.4 * sin(uTime * 2.7 + ph * 1.9));
-        transformed.z += aSway * 0.5 * sin(uTime * 1.2 + ph * 1.4); }`);
+        transformed.z += aSway * 0.5 * sin(uTime * 1.2 + ph * 1.4); }`;
+  lit.onBeforeCompile = sh => {
+    sh.uniforms.uTime = DECOR_U.uTime;
+    sh.vertexShader = 'uniform float uTime;\nattribute float aSway;\n' + sh.vertexShader.replace('#include <begin_vertex>', SWAY);
     if (typeof LVL_LIGHTS === 'string') sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', LVL_LIGHTS);
   };
   lit.customProgramCacheKey = () => 'decorLit';
@@ -74,7 +75,15 @@ function decorMats() {
     transparent: true, depthWrite: false, toneMapped: false,
     blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
   });
-  _dMats = { lit, glow, flame, shaft, motes };
+  // shadow pass for swaying props: the same sway as the visible mesh, otherwise the leaves move out of
+  // their own (static) shadow and the canopy tops shimmer with self-shadowing
+  const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  depth.onBeforeCompile = sh => {
+    sh.uniforms.uTime = DECOR_U.uTime;
+    sh.vertexShader = 'uniform float uTime;\nattribute float aSway;\n' + sh.vertexShader.replace('#include <begin_vertex>', SWAY);
+  };
+  depth.customProgramCacheKey = () => 'decorDepth';
+  _dMats = { lit, glow, flame, shaft, motes, depth };
   for (const k in _dMats) _dMats[k].userData.shared = true;
   return _dMats;
 }
@@ -141,6 +150,10 @@ function decorBuilder(out) {
     // box: colour (sRGB hex), size, position of the bottom centre; o = { ry, rx, rz, g: AO grad, sw/sb: sway top/bottom, e: emissive }
     box(c, sx, sy, sz, x, y, z, o) {
       o = o || _DNO;
+      // tiny deterministic size jitter so overlapping boxes (e.g. canopy slabs of one layer) never share
+      // exactly coplanar faces, which z-fight and flicker as the camera moves
+      _dSeq = (_dSeq + 0.6180339887) % 1;
+      sy += 0.004 + _dSeq * 0.03; sx += _dSeq * 0.012; sz += (1 - _dSeq) * 0.012;
       _de.set(o.rx || 0, o.ry || 0, o.rz || 0);
       _dq.setFromEuler(_de);
       // bottom-centre pivot: centre = pos + R * (0, sy/2, 0)
@@ -152,7 +165,10 @@ function decorBuilder(out) {
       if (o.e) { dwBox(out.glow, _dm2, _dc.r, _dc.g, _dc.b, 0, 0, 0, false); out.stats.glow++; return; }
       const key = (Math.floor(wx / DECOR_CHUNK) * 4096 + Math.floor(wz / DECOR_CHUNK)) * 2 + (b.cast ? 1 : 0);
       let W = out.chunks.get(key); if (!W) { out.chunks.set(key, W = DWriter()); W.cast = !!b.cast; }
-      dwBox(W, _dm2, _dc.r, _dc.g, _dc.b, o.g === undefined ? 0.18 : o.g, o.sb || 0, o.sw || 0, y <= 0.001 && !o.rx && !o.rz);
+      // shadow casters (trees, bushes, pillars…) don't sway: the shadow map refreshes at half rate, so a
+      // swaying caster would alternate between matching and lagging its shadow = flicker on the canopy
+      const cs = b.cast ? 0 : 1;
+      dwBox(W, _dm2, _dc.r, _dc.g, _dc.b, o.g === undefined ? 0.18 : o.g, cs * (o.sb || 0), cs * (o.sw || 0), y <= 0.001 && !o.rx && !o.rz);
       out.stats.boxes++;
     },
     // blade: thin box growing from a base point along (yaw, pitch-from-vertical)
@@ -622,7 +638,9 @@ function decorHeights(map, group) {
   return h;
 }
 
+let _dSeq = 0;
 function buildDecor(map, theme, group) {
+  _dSeq = 0;
   const kit = DECOR_KITS[theme.kit || theme.deco];
   if (!kit || !group || !map) return null;
   const tier = typeof gfxTier === 'function' ? gfxTier() : 'high';
@@ -827,6 +845,7 @@ function buildDecor(map, theme, group) {
     if (!W2.nv) continue;
     const mesh = new THREE.Mesh(dwGeometry(W2, true), M.lit);
     mesh.castShadow = W2.cast; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+    if (W2.cast) mesh.customDepthMaterial = M.depth;
     dg.add(mesh);
   }
   if (out.glow.nv) { const m = new THREE.Mesh(dwGeometry(out.glow, false), M.glow); m.matrixAutoUpdate = false; dg.add(m); }

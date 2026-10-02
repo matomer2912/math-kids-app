@@ -7,8 +7,13 @@ const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: t
 const SHADOW_GEO = new THREE.CircleGeometry(1, 12);
 
 function lam(color, emissive) { return new THREE.MeshLambertMaterial({ color, emissive: emissive || 0 }); }
+let _bxSeq = 0;
 function bx(parent, w, h, d, x, y, z, m) {
-  const me = new THREE.Mesh(BOXG, m); me.scale.set(w, h, d); me.position.set(x, y, z); parent.add(me); return me;
+  // tiny deterministic size jitter: parts that are flush with each other (crate straps on the lid, barrel
+  // bands, trims) would otherwise share exactly coplanar faces and z-fight (flicker) as the camera moves
+  _bxSeq = (_bxSeq + 0.6180339887) % 1;
+  const e = 0.004 + _bxSeq * 0.01;
+  const me = new THREE.Mesh(BOXG, m); me.scale.set(w + e, h + e, d + e); me.position.set(x, y, z); parent.add(me); return me;
 }
 function addShadow(root, r) {
   const s = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT); s.rotation.x = -Math.PI / 2; s.position.y = 0.02; s.scale.setScalar(r); root.add(s);
@@ -563,8 +568,8 @@ function buildEnemyModel(skin, theme, size) {
       mdl = shell('p', 0.55);
       const wood = tm(mdl, 0xa8743a), dark = tm(mdl, 0x6a4520);
       bx(mdl.body, 0.9, 0.9, 0.9, 0, 0.45, 0, wood);
-      for (const y of [0.05, 0.85]) { bx(mdl.body, 0.94, 0.1, 0.94, 0, y, 0, dark); }
-      bx(mdl.body, 0.94, 0.9, 0.1, 0, 0.45, 0, dark); bx(mdl.body, 0.1, 0.9, 0.94, 0, 0.45, 0, dark);
+      for (const y of [0.05, 0.87]) { bx(mdl.body, 0.94, 0.1, 0.94, 0, y, 0, dark); }
+      bx(mdl.body, 0.94, 0.94, 0.1, 0, 0.45, 0, dark); bx(mdl.body, 0.1, 0.96, 0.94, 0, 0.45, 0, dark);
       break;
     }
     case 'barrel': case 'xbarrel': {
