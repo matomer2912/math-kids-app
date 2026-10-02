@@ -460,18 +460,22 @@ function drawQRCanvas(cv, text, size) {
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.fillStyle = '#000';
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect((c + 4) * cell, (r + 4) * cell, cell, cell);
 }
-const ROOM_STATUS_TEXT = {
-  open: '🟢 Online — kids can join with the code',
-  connecting: '⏳ Opening the online lobby…',
-  offline: '📵 No signal for codes right now (retrying). Use the QR button.',
-};
+// Lobby status line. Never "no signal" while the phone is online: then it's the matchmaking servers.
+function roomStatusText() {
+  const st = Net.roomStatus(), i = Net.roomInfo && Net.roomInfo();
+  if (!st || !i) return '';
+  if (st === 'open') return '🟢 Online — kids can join with the code (' + i.up + '/' + i.total + ' matchmaking servers)';
+  if (!Net.isOnline()) return '📵 This phone is offline — turn on Wi-Fi or mobile data, or use the QR button.';
+  if (st === 'connecting') return '⏳ Connecting to the matchmaking servers…';
+  return '⚠️ Can\'t reach the matchmaking servers (still trying). Try mobile data or the 📶 test — or use the QR button.';
+}
 
 // ---------- host lobby ----------
 let roomQRFor = null;
 function renderRoomInfo() {
   const code = Net.roomCode;
   if ($('roomCode')) $('roomCode').textContent = code || '····';
-  if ($('roomStatus')) $('roomStatus').textContent = ROOM_STATUS_TEXT[Net.roomStatus()] || '';
+  if ($('roomStatus')) $('roomStatus').textContent = roomStatusText();
   if (code && $('roomQR') && roomQRFor !== code) {
     roomQRFor = code;
     drawQRCanvas($('roomQR'), joinUrl(code), Math.max(110, Math.min(190, innerHeight * 0.4, innerWidth * 0.22)));
@@ -500,10 +504,10 @@ function showAddPlayerPanel() {
   Net.showPanel({
     title: 'Join code: ' + code,
     msg: 'On the other phone: Join Co-op → type ' + code + ' (or scan this with the camera).',
-    hint: ROOM_STATUS_TEXT[Net.roomStatus()] || '',
+    hint: roomStatusText(),
     qr: joinUrl(code),
     buttons: [
-      { label: '📷 No signal? QR pairing', fn: () => { addPanelOpen = false; Net.hostAddPlayer().then(id => toast('✅ Player ' + (id + 1) + ' connected!')).catch(() => { }); } },
+      { label: '📷 No internet? QR pairing', fn: () => { addPanelOpen = false; Net.hostAddPlayer().then(id => toast('✅ Player ' + (id + 1) + ' connected!')).catch(() => { }); } },
       { label: 'Close', cls: 'net-go', fn: () => { addPanelOpen = false; Net.hidePanel(); } },
     ],
   });
@@ -518,13 +522,21 @@ function openJoin(prefill) {
   ['menu', 'wait'].forEach(id => $(id).classList.add('hidden'));
   $('join').classList.remove('hidden');
   $('codeIn').value = prefill || '';
-  setJoinStatus('');
+  setJoinStatus(Net.isOnline() ? '' : '📵 This phone is offline — the code needs internet. Use "Offline QR join".');
 }
 const JOIN_ERR = {
-  noroom: code => 'No game with code ' + code + '. Check the code on the host\'s screen.',
-  full: () => 'That game is full (4 players max).',
-  nosignal: () => 'No internet signal. Try again, or use the offline QR join.',
+  noroom: code => '❌ No game with code ' + code + '. Check the code on the host\'s screen.',
+  full: () => '❌ That game is full (4 players max).',
+  offline: () => '📵 This phone is offline. Turn on Wi-Fi or mobile data — or use the offline QR join.',
+  nosignal: () => '⚠️ Can\'t reach the matchmaking servers from here. Try mobile data off/on, the 📶 test, or the offline QR join.',
+  timeout: code => '❌ No answer from game ' + code + '. Is the host\'s lobby open? Try again.',
+  connect: () => '❌ Found the game, but the phones couldn\'t connect. Put everyone on the same Wi-Fi or Dad\'s hotspot, then try again.',
   badcode: () => 'Type the 4 letters from the host\'s screen.',
+};
+Net.onJoinStatus = i => {
+  if (!joinBusy || !i) return;
+  const n = i.total > 1 ? ' (' + i.up + '/' + i.total + ' servers)' : '';
+  setJoinStatus(i.phase === 'connecting' ? '⏳ Found the game! Connecting…' : i.phase === 'asking' ? '⏳ Looking for game ' + i.code + '…' + n : '⏳ Reaching the matchmaking servers…');
 };
 function joinByCode(raw) {
   const code = String(raw || '').toUpperCase().replace(/[^A-Z]/g, '');
@@ -542,7 +554,7 @@ function joinByCode(raw) {
     joinBusy = false;
     if (!G.inGame && G.role === 'guest') G.role = null;
     const f = JOIN_ERR[err && err.message];
-    setJoinStatus('❌ ' + (f ? f(code) : 'Couldn\'t connect. Try again — or everyone on Dad\'s hotspot.'));
+    setJoinStatus(f ? f(code) : '❌ Couldn\'t connect. Try again — or put everyone on Dad\'s hotspot.');
   });
 }
 function onGuestConnected(id) {
@@ -572,6 +584,10 @@ $('offlineJoinBtn').onclick = () => {
   Net.joinGame().then(id => onGuestConnected(id)).catch(() => { if (!G.inGame) G.role = null; });
 };
 $('joinBack').onclick = () => { joinBusy = false; quitToMenu(); };
+$('joinTestBtn').onclick = () => { if (!joinBusy) Net.showConnTest(); };
+$('lobbyTestBtn').onclick = () => Net.showConnTest();
+addEventListener('online', () => { renderRoomInfo(); if (!$('join').classList.contains('hidden') && !joinBusy) setJoinStatus(''); });
+addEventListener('offline', () => { renderRoomInfo(); if (!$('join').classList.contains('hidden') && !joinBusy) setJoinStatus('📵 This phone is offline — the code needs internet. Use "Offline QR join".'); });
 $('waitBack').onclick = () => quitToMenu();
 
 // ---------- guest auto-rejoin ----------
@@ -655,7 +671,7 @@ function updateBadge() {
       const id = ids[i], p = G.role === 'host' ? Sim.S.players.get(id) : null;
       const name = G.role === 'host' ? (p ? p.name : 'P' + (id + 1)) : 'Host';
       if (!s) { lines.push(name + ': no stats'); return; }
-      lines.push(rttDot(s) + ' ' + name + ': ' + (s.rtt == null ? '?' : s.rtt + ' ms') + ' · ' + (s.relay ? 'RELAY (TURN)' : 'direct') + ' · via ' + s.via);
+      lines.push(rttDot(s) + ' ' + name + ': ' + (s.rtt == null ? '?' : s.rtt + ' ms') + ' · ' + (s.relay ? 'RELAY (TURN)' : 'direct') + ' · via ' + s.via + (s.sig ? ' (' + s.sig + ')' : ''));
       lines.push('   ' + s.local + ' ↔ ' + s.remote + ' · ' + s.state);
     });
     if (G.role === 'host') {
@@ -702,7 +718,10 @@ function addItem(it) {
   lootToast(it, diff);
 }
 function salvageValue(it) { return Math.round((it.r + 1) * (it.r + 1) * 4 * it.p); }
-function upgradeCost(it) { return Math.round(15 * it.p * (it.r + 1)); }
+// each upgrade costs ~1.5x the previous one (rounded to 5), more for rarer gear; a weapon can't be
+// upgraded past the deepest floor reached + 2, so a lucky early drop can't be pumped up endlessly
+function upgradeCost(it) { return Math.max(5, Math.round(15 * (it.r + 1) * Math.pow(1.5, it.p - 1) / 5) * 5); }
+function upgradeCap() { return (Profile.best || 1) + 2; }
 function equipItem(it) {
   const i = Profile.inv.indexOf(it); if (i < 0) return;
   Profile.eq = i; saveProfile(); pushStats(); refreshHUDStatic(); sfx('item');

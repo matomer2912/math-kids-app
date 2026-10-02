@@ -14,7 +14,12 @@ const Sim = (() => {
   const ev = (...a) => { S.events.push(a); if (Sim.onEvent) Sim.onEvent(a); };
   const scaleHp = f => 1 + 0.38 * (f - 1);
   const scaleDmg = f => 1 + 0.16 * (f - 1);
-  const coopHp = () => 1 + 0.55 * (Math.max(1, S.players.size) - 1);
+  // co-op scaling: more heroes -> more enemies (+30% per extra hero) and a little more health (+12.5%);
+  // bosses have no extra bodies, so they get the bigger health boost (+55% per extra hero)
+  const nHeroes = () => Math.max(1, S.players.size);
+  const coopN = () => 1 + 0.3 * (nHeroes() - 1);
+  const coopHp = () => 1 + 0.125 * (nHeroes() - 1);
+  const coopBossHp = () => 1 + 0.55 * (nHeroes() - 1);
 
   function alivePlayers() { const a = []; for (const p of S.players.values()) if (!p.downed) a.push(p); return a; }
 
@@ -141,7 +146,7 @@ const Sim = (() => {
     if (map.boss) {
       const arena = rooms[1];
       const B = S.theme.boss;
-      const hp = Math.round(ENEMIES.boss.hp * scaleHp(f) * coopHp() * (1 + 0.15 * Math.floor(f / 12)));
+      const hp = Math.round(ENEMIES.boss.hp * scaleHp(f) * coopBossHp() * (1 + 0.15 * Math.floor(f / 12)));
       const bx = (arena.x + arena.w / 2) * TILE, bz = (arena.y + arena.h / 2) * TILE;
       const e = spawnEnemy('boss', bx, bz, { skin: 'boss' });
       e.hp = e.maxHp = hp; e.size = 2.8; e.r = 1.9; e.name = B.name; e.phase = 1; e.st = 'idle'; e.t = 2; e.atkIdx = 0;
@@ -156,7 +161,7 @@ const Sim = (() => {
     const plan = rooms.map((r, i) => {
       if (i === 0) return 0;
       let n = Math.round(r.w * r.h / 17 * (0.75 + 0.06 * Math.min(f, 12)));
-      n = Math.min(n, 9);
+      n = Math.min(Math.round(Math.min(n, 9) * coopN()), 13);
       if (r.kind === 'shrine') n = Math.min(n, 2);
       if (r.kind === 'arena') n = 0;
       if (r.kind === 'vault') n = 1;
@@ -168,7 +173,7 @@ const Sim = (() => {
     const nChestR = (f > 4 ? 2 : 1);
     const propTotal = props.reduce((a, b) => a + b, 0) + nChestR + rooms.filter(r => r.kind === 'vault' || r.kind === 'traps').length * 1.5 + 3;
     const mobTotal = plan.reduce((a, b) => a + b, 0);
-    const mobBudget = Math.max(20, MAX_ENTS - propTotal - 8);
+    const mobBudget = Math.round(Math.max(20, MAX_ENTS - propTotal - 8) * coopN()); // snapshots only carry nearby entities, so co-op can afford more
     const scale = Math.min(1, mobBudget / Math.max(1, mobTotal));
 
     const chestRooms = new Set();
@@ -1222,7 +1227,7 @@ const Sim = (() => {
           continue;
         }
         A.wave++; A.pending = true;
-        const n = Math.min(7, 3 + Math.floor(S.floor / 3) + A.wave);
+        const n = Math.min(10, Math.round(Math.min(7, 3 + Math.floor(S.floor / 3) + A.wave) * coopN()));
         const pool = MOB_KEYS.filter(k => !ENEMIES[k].minF || S.floor >= ENEMIES[k].minF);
         const spots = [];
         for (let i = 0; i < n; i++) { const s = freeSpotIn(r, 1.5); if (s) { spots.push(s); ev('tele', r1(s.x), r1(s.z), 1.3, 1.0); } }

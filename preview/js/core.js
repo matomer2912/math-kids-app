@@ -51,6 +51,11 @@ const AA = (() => {
   return true;
 })();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: AA, powerPreference: 'high-performance' });
+// pixel textures: linear filtering + pixel-art AA in the level shader (look.js) instead of nearest
+// sampling, which crawled/shimmered while moving. Needs fwidth -> WebGL2 only (else stays nearest).
+if (renderer.capabilities.isWebGL2 && typeof LOOK_ATLAS !== 'undefined') {
+  LOOK_AA_ON = true; LOOK_ATLAS.magFilter = LOOK_ATLAS.minFilter = THREE.LinearFilter; LOOK_ATLAS.needsUpdate = true;
+}
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
@@ -196,7 +201,7 @@ function applyThemeLighting(T) {
   document.documentElement.style.setProperty('--vig', vig);
   if (typeof LOOK_U !== 'undefined') { // look.js shared uniforms (level materials + characters)
     const LK = typeof lookOf === 'function' ? lookOf(T) : {};
-    LOOK_U.uLkMist.value.set(L.mist[0] * (S ? S.mist : 1), L.mist[1], L.mist[2], 0); LOOK_U.uLkMistC.value.setHex(L.mist[3]);
+    LOOK_U.uLkMist.value.set(L.mist[0] * (S ? S.mist : 1), L.mist[1], L.mist[2], L.abyss === undefined ? 1 : L.abyss); LOOK_U.uLkMistC.value.setHex(L.mist[3]);
     LOOK_U.uLkCookie.value.set(L.dapple * (S ? 0.7 : 1), L.dappleScale || 0.055, 0.6, 0);
     LOOK_U.uLkAO.value.set((LK.ao || 0.5) * (S ? 0.75 : 1), LK.aoR || 0.42, LK.side || 0.86, LK.base || 0.62);
     LOOK_U.uLkRim.value.set(L.rim[1] * (S ? S.rim : 1), L.rim[2], 0, 0); LOOK_U.uLkRimC.value.setHex(L.rim[0]);

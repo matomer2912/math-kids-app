@@ -479,7 +479,9 @@ function buildGlows(grp, list) {
   const camQ = typeof camera !== 'undefined' ? camera.quaternion : new THREE.Quaternion();
   const flatQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2), noQ = new THREE.Quaternion();
   list.forEach((g, n) => {
-    _v3.set(g.x, g.y, g.z); _s3.set(g.sx, g.sy || g.sx, 1);
+    // floor pools sit just above the flat floor dressing (runners/webs/puddles top out at 0.06): sharing
+    // their plane would z-fight (flicker) as the camera moves
+    _v3.set(g.x, g.k === 0 && g.y > -0.05 && g.y < 0.1 ? 0.1 : g.y, g.z); _s3.set(g.sx, g.sy || g.sx, 1);
     _m4.compose(_v3, g.k === 0 ? flatQ : g.k === 1 ? noQ : camQ, _s3); m.setMatrixAt(n, _m4);
     _col.setHex(g.c).multiplyScalar(g.i); m.setColorAt(n, _col);
     ph[n * 2] = g.ph; ph[n * 2 + 1] = g.fl;
@@ -616,8 +618,8 @@ function buildLevel(map, theme) {
     if (theme.pattern === 'basalt' && hash(i + 3, j + 1) < 0.1) E.add(0xff6a00, 1.2, 0.02, 0.08, x, 0.01, z, hash(i, j) * 3);
     if (theme.pattern === 'marble' && (i % 4 === 0 && j % 4 === 0)) L.add(0xffc72c, 0.4, 0.02, 0.4, x, 0.01, z, 0.785);
     if (theme.pattern === 'ice' && hash(i, j + 9) < 0.05) L.add(0xffffff, 0.9, 0.02, 0.05, x, 0.01, z, hash(i + 1, j) * 3);
-    // puddles
-    if ((deco === 'jungle' || deco === 'crypt' || deco === 'pirate') && !tt[k] && v === T_FLOOR && blob(i + 11, j + 5, 2) > 0.8 && hash(i, j + 1) < 0.6) { const pc = LK.puddle || (deco === 'jungle' ? 0x3a8a9a : 0x5a7a9a); A.add(pc, 1.7, 0.02, 1.5, x, 0.02, z, hash(i, j) * 0.5); A.add(pc, 0.9, 0.025, 1.1, x + (hash(i + 1, j) - 0.5) * 1.2, 0.021, z + (hash(i, j + 1) - 0.5) * 1.0, hash(j, i) * 2); }
+    // puddles (not under a corridor runner: same height as its trim -> z-fighting)
+    if ((deco === 'jungle' || deco === 'crypt' || deco === 'pirate') && !tt[k] && v === T_FLOOR && !(kind === 'corr' && deco !== 'jungle' && walk(i - 1, j) && walk(i + 1, j) && walk(i, j - 1) && walk(i, j + 1)) && blob(i + 11, j + 5, 2) > 0.8 && hash(i, j + 1) < 0.6) { const pc = LK.puddle || (deco === 'jungle' ? 0x3a8a9a : 0x5a7a9a); A.add(pc, 1.7, 0.02, 1.5, x, 0.02, z, hash(i, j) * 0.5); A.add(pc, 0.9, 0.025, 1.1, x + (hash(i + 1, j) - 0.5) * 1.2, 0.021, z + (hash(i, j + 1) - 0.5) * 1.0, hash(j, i) * 2); }
     // carpets / runners down the middle of corridors
     if (kind === 'corr' && map.corr[k] && walk(i - 1, j) && walk(i + 1, j) && walk(i, j - 1) && walk(i, j + 1) && !tt[k]) {
       // corridor direction from how far the corridor runs each way (corridors are 3 tiles wide, so the
@@ -824,7 +826,7 @@ function buildLevel(map, theme) {
         anim.shrine.push(Object.assign(new THREE.Mesh(BOXG, new THREE.MeshBasicMaterial({ color: 0x9ff7ff, toneMapped: false })), {}));
         { const gem = anim.shrine[anim.shrine.length - 1]; gem.scale.setScalar(0.45); gem.position.set(x, 1.9, z); gem.rotation.set(0.6, 0, 0.6); grp.add(gem);
           const ring = new THREE.Mesh(new THREE.RingGeometry(2.6 * TILE - 0.25, 2.6 * TILE, 40), new THREE.MeshBasicMaterial({ color: 0x7dffb0, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
-          ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.04, z); grp.add(ring); gem.userData.ring = ring; }
+          ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.1, z); grp.add(ring); gem.userData.ring = ring; }
         break;
       case 'column':
         L.add(shade(theme.top, 0.95), 1.3, 0.3, 1.3, x, 0.15, z); L.add(theme.top, 0.9, 2.6, 0.9, x, 1.45, z, 0, 0.04); L.add(shade(theme.top, 0.95), 1.3, 0.3, 1.3, x, 2.8, z);
@@ -853,14 +855,13 @@ function buildLevel(map, theme) {
         L.add(0xffc72c, 1.0, 0.3, 0.9, x, 0.15, z, n); L.add(0xffd84a, 0.6, 0.25, 0.5, x, 0.4, z, n + 1);
       }
     } else if (r.kind === 'arena') {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(Math.min(r.w, r.h) * 0.75, Math.min(r.w, r.h) * 0.75 + 0.35, 48), new THREE.MeshBasicMaterial({ color: 0xff4a2a, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(cx, 0.03, cz); grp.add(ring);
+      // ambush room: no floor ring or red lights giving the surprise away, just four ordinary braziers
       for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
         const i = Math.floor((cx + dx * (r.w / 2 - 1.2) * TILE) / TILE), j = Math.floor((cz + dz * (r.h / 2 - 1.2) * TILE) / TILE);
         if (at(i, j) !== T_FLOOR) continue;
         const x = (i + 0.5) * TILE, z = (j + 0.5) * TILE;
-        L.add(0x3a3a3a, 0.5, 1.0, 0.5, x, 0.5, z); E.add(0xff4a2a, 0.45, 0.25, 0.45, x, 1.1, z);
-        glow(0, x, 0.06, z, 4.5, 4.5, 0xff5a2a, 0.35, 0.12); glow(2, x, 1.35, z, 1.6, 1.6, 0xff6a3a, 0.7, 0.2); light(x, 1.9, z, 0xff6a2a, 1.4, 9);
+        L.add(0x3a3a3a, 0.5, 1.0, 0.5, x, 0.5, z); E.add(LC, 0.45, 0.25, 0.45, x, 1.1, z);
+        glow(0, x, 0.06, z, 4.5, 4.5, LC, 0.35, 0.12); glow(2, x, 1.35, z, 1.6, 1.6, LC, 0.7, 0.2); light(x, 1.9, z, LC, 1.4, 9);
       }
     } else if (r.kind === 'storage') {
       // sacks along the top wall

@@ -13,6 +13,7 @@
 //   LOOK_U                    -> shared uniforms (uLkTime is advanced by animateLevel)
 'use strict';
 
+let LOOK_AA_ON = false; // smooth pixel-art sampling; core.js turns it on when WebGL2 (fwidth) is available
 const LOOK_TS = 32, LOOK_COLS = 8, LOOK_ROWS = 4;           // atlas: 8 x 4 tiles of 32 x 32 px = 256 x 128
 const LOOK_TILES = ['plain', 'slab', 'slabCrack', 'cobble', 'brick', 'brickMoss', 'rock', 'dirt',
   'mossFloor', 'roots', 'temple', 'sand', 'planks', 'rubble', 'grassTop', 'boneTop',
@@ -150,7 +151,7 @@ const LOOK_CANOPY = lookDataTex(64, n => {
 // ---------- shared uniforms (values set per world by applyThemeLighting in core.js) ----------
 const LOOK_U = {
   uLkTime: { value: 0 },
-  uLkMist: { value: new THREE.Vector4(0, -1.5, 0.8, 0) },     // density, y fully misty, y mist-free, -
+  uLkMist: { value: new THREE.Vector4(0, -1.5, 0.8, 1) },     // density, y fully misty, y mist-free, abyss fade 0..1
   uLkMistC: { value: new THREE.Color(0x8090a0) },
   uLkNoise: { value: LOOK_NOISE },
   uLkCanopy: { value: LOOK_CANOPY },
@@ -203,7 +204,16 @@ const LOOK_FS_MAP = `
 { vec2 f = fract(vLkUv);
   float r = vLkT.w;
   vec2 g = r < 0.5 ? f : r < 1.5 ? vec2(1.0 - f.y, f.x) : r < 2.5 ? vec2(1.0 - f.x, 1.0 - f.y) : vec2(f.y, 1.0 - f.x);
-  g = clamp(g, 0.5 / ${LOOK_TS}.0, 1.0 - 0.5 / ${LOOK_TS}.0);
+  vec2 px = g * ${LOOK_TS}.0;
+#ifdef LOOK_AA
+  // pixel-art AA: texels stay crisp, but each texel edge is blended over one screen pixel (linear
+  // filtering), so the texture no longer crawls/shimmers while the camera moves (~1.5 px per texel on phones)
+  vec2 dw = fwidth(vLkUv * ${LOOK_TS}.0);
+  if ((r > 0.5 && r < 1.5) || r > 2.5) dw = dw.yx;
+  vec2 sm = floor(px + 0.5);
+  px = sm + clamp((px - sm) / max(dw, vec2(1e-4)), -0.5, 0.5);
+#endif
+  g = clamp(px, 0.5, ${LOOK_TS}.0 - 0.5) / ${LOOK_TS}.0;   // stay inside this atlas tile
   float t = floor(vLkT.x + 0.5);
   vec2 cell = vec2(mod(t, ${LOOK_COLS}.0), floor(t / ${LOOK_COLS}.0));
   diffuseColor.rgb *= texture2D(map, (cell + g) / vec2(${LOOK_COLS}.0, ${LOOK_ROWS}.0)).rgb;
@@ -246,7 +256,7 @@ if (uLkMist.x > 0.0) {
   gl_FragColor.rgb = mix(gl_FragColor.rgb, uLkMistC, clamp(mf, 0.0, 0.92));
 }
 #endif
-gl_FragColor.rgb *= 1.0 - 0.9 * smoothstep(-1.2, -4.2, vLkW.y);              // abyss: deep chasms fade to black (water pits are shallow)
+gl_FragColor.rgb *= 1.0 - 0.9 * uLkMist.w * smoothstep(-1.2, -4.2, vLkW.y);   // abyss: deep chasms fade to black (water pits are shallow; off in the sky world: gfx.abyss 0)
 #include <tonemapping_fragment>`;
 const LOOK_LIGHTS = THREE.ShaderChunk.lights_fragment_begin
   .replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0')
@@ -256,7 +266,7 @@ const LOOK_LIGHTS = THREE.ShaderChunk.lights_fragment_begin
 function lookLow() { return typeof GFX !== 'undefined' && GFX.q === 'low'; }
 function lookPatch(sh, tex) {
   Object.assign(sh.uniforms, LOOK_U);
-  if (tex) sh.defines = Object.assign(sh.defines || {}, { LOOK_TEX: '' });
+  if (tex) sh.defines = Object.assign(sh.defines || {}, LOOK_AA_ON ? { LOOK_TEX: '', LOOK_AA: '' } : { LOOK_TEX: '' });
   if (lookLow()) sh.defines = Object.assign(sh.defines || {}, { LOOK_LOW: '' });
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>' + LOOK_VS_DECL).replace('#include <project_vertex>', '#include <project_vertex>' + LOOK_VS);
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + LOOK_FS_DECL)

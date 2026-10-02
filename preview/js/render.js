@@ -115,7 +115,10 @@ function syncVisuals(dt) {
     }
     o.model.ring.material.opacity = 0.6 + 0.3 * Math.sin(T * 4);
     buffGlow(o, p.bf);
-    if (o.xr) o.xr.visible = !p.downed && behindWall(o.x, o.z);
+    if (o.xr) { // fade instead of blinking when the wall test flips back and forth along a wall edge
+      o.xrK = Math.max(0, Math.min(1, (o.xrK || 0) + (!p.downed && behindWall(o.x, o.z) ? dt : -dt) * 6));
+      o.xr.visible = o.xrK > 0.01; o.xr.material.opacity = 0.8 * o.xrK;
+    }
   }
   // enemies
   for (const e of v.enemies) {
@@ -126,7 +129,7 @@ function syncVisuals(dt) {
       o = { obj: model.root, model, x: e.x, z: e.z, f: e.f, px: e.x, pz: e.z };
       if (e.fl & 16) { // elite glow ring (geometry/material are freed by gpuCollect when removed)
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.05, 20), new THREE.MeshBasicMaterial({ color: 0xffb300, side: THREE.DoubleSide, transparent: true, opacity: 0.9, toneMapped: false }));
-        ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; model.root.add(ring);
+        ring.rotation.x = -Math.PI / 2; ring.position.y = 0.12; model.root.add(ring);
       }
       scene.add(o.obj); vis.set(key, o); prepModel(o.obj);
       if (e.sk !== 'boss' && !isPropSkin(e.sk)) { o.bar = makeBar(); o.bar.visible = false; scene.add(o.bar); }
@@ -334,7 +337,7 @@ function boltFx(x1, z1, x2, z2) { // lightning strike along a line
 }
 function cloudFx(x, z, r, dur, color) { // lingering poison / spore cloud
   const grp = new THREE.Group();
-  const disc = new THREE.Mesh(discGeo, basic(color, 0.3)); disc.rotation.x = -Math.PI / 2; disc.scale.setScalar(r); disc.position.y = 0.06; grp.add(disc);
+  const disc = new THREE.Mesh(discGeo, basic(color, 0.3)); disc.rotation.x = -Math.PI / 2; disc.scale.setScalar(r); disc.position.y = 0.1; grp.add(disc);
   const puffs = [];
   for (let i = 0; i < 6; i++) { const p = new THREE.Mesh(SPHG, basic(color, 0.28)); const a = i / 6 * 6.28; p.position.set(Math.sin(a) * r * 0.55, 0.6, Math.cos(a) * r * 0.55); p.scale.setScalar(r * 0.45); grp.add(p); puffs.push(p); }
   grp.position.set(x, 0, z);
@@ -448,7 +451,7 @@ function lootGlow(color, size, inten) {
   let m = lootGlowMats[key];
   if (!m) { m = lootGlowMats[key] = makeGlowMaterial(); m.uniforms.uColor.value.setHex(color).multiplyScalar(inten); m.userData.shared = true; }
   const g = new THREE.Mesh(LOOT_GLOW_GEO, m);
-  g.rotation.x = -Math.PI / 2; g.position.y = 0.06; g.scale.setScalar(size); g.renderOrder = 2;
+  g.rotation.x = -Math.PI / 2; g.position.y = 0.13; g.scale.setScalar(size); g.renderOrder = 2; // above floor dressing
   return g;
 }
 const _ld = SUN_BASIS.d, _lr = SUN_BASIS.r, _lu = SUN_BASIS.u; // light-space basis (core.js aimSun, per world)
@@ -460,7 +463,7 @@ function updateLights(dt) {
   if (sun.castShadow) {
     const sc = sun.shadow.camera, texel = (sc.right - sc.left) / sun.shadow.mapSize.x, texelV = (sc.top - sc.bottom) / sun.shadow.mapSize.y;
     _lt.set(fx, 0, fz);
-    const r = Math.round(_lt.dot(_lr) / texel) * texel, u = Math.round(_lt.dot(_lu) / texelV) * texelV, d = _lt.dot(_ld);
+    const r = Math.round(_lt.dot(_lr) / texel) * texel, u = Math.round(_lt.dot(_lu) / texelV) * texelV, d = Math.round(_lt.dot(_ld) * 2) / 2; // depth axis too
     _lt.copy(_lr).multiplyScalar(r).addScaledVector(_lu, u).addScaledVector(_ld, d);
     sun.target.position.copy(_lt); sun.position.copy(_lt).add(SUN_OFF);
     // shadow map refresh every frame: a half-rate refresh made animated casters (flames, heroes, enemies)

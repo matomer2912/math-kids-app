@@ -162,23 +162,25 @@ button { font:inherit; color:var(--ink); border:none; cursor:pointer; background
   transform:scale(.85); transform-origin:100% 100%; } /* 15% smaller cluster, anchored bottom-right (smallest button stays > 54px) */
 .abtn { --c1:#888; --c2:#333; --rc:rgba(255,227,154,.9);
   position:absolute; border-radius:50%; display:flex; align-items:center; justify-content:center; pointer-events:auto; overflow:visible;
-  background:radial-gradient(circle at 50% 32%,var(--c1),var(--c2) 75%); opacity:.93;
-  border:3px solid var(--edge);
-  box-shadow:0 0 0 3px var(--rc),inset 0 4px 0 rgba(255,255,255,.28),inset 0 -5px 0 rgba(0,0,0,.3),0 6px 0 rgba(0,0,0,.4);
-  transition:transform .06s, filter .1s; }
-.abtn.down { transform:scale(.9); filter:brightness(1.3); }
+  /* outline style: no fill colour, just a coloured ring + icon over a faint smoked-glass disc (keeps the
+     icon readable on bright floors without hiding the action behind it) */
+  background:radial-gradient(circle,rgba(0,0,0,.06) 50%,rgba(0,0,0,.22)); --ring:color-mix(in srgb,var(--c1) 85%,transparent);
+  border:3px solid var(--ring);
+  box-shadow:0 0 0 1.5px rgba(0,0,0,.3),inset 0 0 0 1.5px rgba(0,0,0,.25);
+  transition:transform .06s, background .1s; }
+.abtn.down { transform:scale(.92); background:color-mix(in srgb,var(--c1) 28%,transparent); }
 .abtn .cd { position:absolute; inset:0; border-radius:50%; pointer-events:none; z-index:2; }
-.abtn .ic { position:relative; z-index:1; filter:drop-shadow(0 3px 0 rgba(0,0,0,.45)); transition:opacity .15s, transform .15s; }
+.abtn .ic { position:relative; z-index:1; opacity:.9; filter:drop-shadow(0 2px 1px rgba(0,0,0,.55)); transition:opacity .15s, transform .15s; }
 .abtn .cdt { position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; font-family:var(--fd); font-size:26px; color:#fff; text-shadow:var(--ol); pointer-events:none; }
 .abtn.cool .ic { opacity:.45; transform:scale(.85); }
-.abtn .lbl { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); z-index:4; padding:1px 7px; border-radius:7px; background:rgba(20,12,5,.9); border:1.5px solid var(--rc);
-  font-family:var(--fd); font-size:11px; letter-spacing:.6px; color:var(--ink); text-shadow:var(--ol-s); white-space:nowrap; }
+.abtn .lbl { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); z-index:4; padding:0 6px; border-radius:7px; background:rgba(0,0,0,.35); border:none; opacity:.85;
+  font-family:var(--fd); font-size:10px; letter-spacing:.6px; color:var(--ink); text-shadow:var(--ol-s); white-space:nowrap; }
 .abtn::after { content:''; position:absolute; inset:-4px; border-radius:50%; border:4px solid #fff; opacity:0; pointer-events:none; }
 .abtn.ready::after { animation:readyring .55s ease-out; }
 .abtn.ready .ic { animation:readypop .45s cubic-bezier(.2,1.8,.4,1); }
 @keyframes readyring { 0% { opacity:.95; transform:scale(.9) } 100% { opacity:0; transform:scale(1.45) } }
 @keyframes readypop { 0% { transform:scale(.7) } 60% { transform:scale(1.25) } 100% { transform:scale(1) } }
-#atkBtn { --c1:#ff7a62; --c2:#9e1a14; right:0; bottom:0; width:118px; height:118px; font-size:52px; box-shadow:0 0 0 4px var(--rc),0 0 16px color-mix(in srgb,var(--rc) 55%,transparent),inset 0 5px 0 rgba(255,255,255,.28),inset 0 -6px 0 rgba(0,0,0,.3),0 7px 0 rgba(0,0,0,.4); }
+#atkBtn { --c1:#ff7a62; --c2:#9e1a14; --ring:color-mix(in srgb,var(--rc) 85%,transparent); right:0; bottom:0; width:118px; height:118px; font-size:52px; border-width:4px; } /* ring = weapon rarity colour */
 #spBtn { --c1:#c58cff; --c2:#4c1a9a; right:124px; bottom:4px; width:80px; height:80px; font-size:36px; }
 #dgBtn { --c1:#79c8ff; --c2:#16509a; right:26px; bottom:132px; width:72px; height:72px; font-size:30px; }
 #ptBtn { --c1:#86f08e; --c2:#157a34; right:118px; bottom:108px; width:64px; height:64px; font-size:28px; }
@@ -739,9 +741,9 @@ input::placeholder { color:#8a7656; }
   <div class="col" style="flex:1 1 0;max-width:420px">
     <div class="card plist" id="lobbyList"></div>
     <button class="big green" id="startCoopBtn">▶ Start Adventure!</button>
-    <button class="big blue" id="addPlayerBtn" style="font-size:16px;padding:12px">📷 No signal? Add player with QR</button>
-    <div class="hint">📶 Fastest: everyone on your <b>hotspot</b>. The code needs signal to connect; the QR button works without.</div>
-    <button class="big gray" id="lobbyBack">Back</button>
+    <button class="big blue" id="addPlayerBtn" style="font-size:16px;padding:12px">📷 No internet? Add player with QR</button>
+    <div class="hint">The code needs internet. The QR button works without — with every phone on the same Wi-Fi or Dad's <b>hotspot</b>.</div>
+    <div class="row2"><button class="big gray sm" id="lobbyBack">Back</button><button class="big gray sm" id="lobbyTestBtn">📶 Connection test</button></div>
   </div>
 </div>
 
@@ -757,8 +759,8 @@ input::placeholder { color:#8a7656; }
   <div class="col" style="flex:1 1 0;max-width:420px">
     <button class="big green" id="codeGoBtn">▶ Join</button>
     <button class="big blue" id="scanCodeBtn">📷 Scan code</button>
-    <button class="big gray" id="offlineJoinBtn" style="font-size:16px;padding:12px">📶 No signal? Offline QR join</button>
-    <button class="big gray" id="joinBack" style="font-size:16px;padding:12px">Back</button>
+    <button class="big gray" id="offlineJoinBtn" style="font-size:16px;padding:12px">📷 No internet? Offline QR join</button>
+    <div class="row2"><button class="big gray sm" id="joinBack">Back</button><button class="big gray sm" id="joinTestBtn">📶 Connection test</button></div>
   </div>
 </div>
 
@@ -845,6 +847,8 @@ input::placeholder { color:#8a7656; }
 <script src="js/dungeon.js"></script>
 <script src="js/models.js"></script>
 <script src="js/decor.js"></script>
+<script src="js/decor-kits-a.js"></script>
+<script src="js/decor-kits-b.js"></script>
 <script src="js/sim.js"></script>
 <script src="js/core.js"></script>
 <script src="js/render.js"></script>
