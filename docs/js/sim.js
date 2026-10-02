@@ -263,10 +263,10 @@ const Sim = (() => {
     }
     return bits;
   }
-  // is (x,z) a fine spot for a pack member: free, no trap, in room ri, away from the portal
+  // is (x,z) a fine spot for a pack member: free, no trap, in room ri (if given), away from the portal
   function packSpotOk(x, z, rad, ri) {
     const map = S.map, k = tileOf(map, x, z);
-    if (blockedCircle(map, x, z, rad) || map.rid[k] !== ri) return false;
+    if (blockedCircle(map, x, z, rad) || (ri !== undefined && map.rid[k] !== ri)) return false;
     const tt = map.tt[k];
     if (tt === TT_SPIKE || tt === TT_VENT || tt === TT_PLATE) return false;
     return Math.hypot(x - map.exit.x, z - map.exit.z) >= 3.5;
@@ -275,7 +275,7 @@ const Sim = (() => {
     const f = S.floor, map = S.map, ri = map.rooms.indexOf(r);
     const type = R() < 0.3 ? 'brute' : f >= 4 && R() < 0.3 ? 'charger' : 'grunt'; // (no shield-bearers: flanking a big one is no fun)
     const aff = champAffixRoll(f, type);
-    const big = type === 'brute' ? 1.3 : 1.5, rad = ENEMIES[type].r * big;
+    const big = type === 'brute' ? 1.3 : 1.6, rad = ENEMIES[type].r * big;
     let c = { x: (r.x + r.w / 2) * TILE, z: (r.y + r.h / 2) * TILE };
     if (!packSpotOk(c.x, c.z, rad, ri)) { c = null; for (let t = 0; t < 30 && !c; t++) { const s = freeSpotIn(r, 2.5, rad); if (s && packSpotOk(s.x, s.z, rad, ri)) c = s; } }
     if (!c) return null;
@@ -293,14 +293,16 @@ const Sim = (() => {
     S.champLastF = f;
     return e;
   }
+  // a minion in the ring around its leader (at spawn: inside the pack's room; called mid-fight: anywhere free)
   function addMinion(L, slot, awake) {
-    const map = S.map, ri = map.rid[tileOf(map, L.homeX, L.homeZ)];
+    const map = S.map, ri = awake ? undefined : map.rid[tileOf(map, L.homeX, L.homeZ)];
     const rr = L.r + 1.4 + R() * 0.8, d = ENEMIES[L.minType];
     let x = L.x + Math.sin(slot) * rr, z = L.z + Math.cos(slot) * rr;
     if (!packSpotOk(x, z, d.r, ri)) {
       let ok = false;
       for (let t = 0; t < 12 && !ok; t++) { const a = slot + (t + 1) * 0.55 * (t % 2 ? 1 : -1), q = rr + (t % 3) * 0.6; x = L.x + Math.sin(a) * q; z = L.z + Math.cos(a) * q; ok = packSpotOk(x, z, d.r, ri); }
-      if (!ok) { const s = freeSpotIn(map.rooms[ri] || map.rooms[0], 1.5); if (!s) return null; x = s.x; z = s.z; }
+      if (!ok && awake) { x = L.x; z = L.z; } // spawnEnemy pushes it out of the champion's body / walls
+      else if (!ok) { const s = freeSpotIn(map.rooms[ri], 1.5); if (!s || !packSpotOk(s.x, s.z, d.r, ri)) return null; x = s.x; z = s.z; }
     }
     const m = spawnEnemy(L.minType, x, z);
     m.cc = 2 | (L.cc & ~3); m.pack = L.pack; m.leader = L; m.slot = slot; m.slotR = rr; m.awake = !!awake;

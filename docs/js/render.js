@@ -448,12 +448,12 @@ function champDecorate(o, e) {
   ch.arcs = new THREE.Group();
   for (let i = 0; i < 6; i++) { const a = new THREE.Mesh(CHAMP_ARC, ch.ring.material); a.rotation.z = i * Math.PI / 3; ch.arcs.add(a); }
   flat(ch.arcs, 0.12);
-  ch.pool = lootGlow(col, 5 / s, 0.7); ch.pool.position.y = 0.14 / s; root.add(ch.pool);
-  ch.col = new THREE.Mesh(CHAMP_COL, new THREE.MeshBasicMaterial({ color: col, vertexColors: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  ch.pool = lootGlow(col, 4.2 / s, 0.45); ch.pool.position.y = 0.14 / s; root.add(ch.pool);
+  ch.col = new THREE.Mesh(CHAMP_COL, new THREE.MeshBasicMaterial({ color: col, vertexColors: true, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
   ch.col.scale.set(1, h * 1.15, 1); ch.col.position.y = 0.1 / s; ch.col.renderOrder = 4; root.add(ch.col);
   ch.gems = ch.aff.map(a => { const g = new THREE.Mesh(CHAMP_GEM, new THREE.MeshBasicMaterial({ color: a.color, toneMapped: false })); root.add(g); return g; });
   const tag = ch.tag = champTag(champName(e.id, cc), ch.aff);
-  tag.position.y = h + 0.95 / s; tag.scale.set(4.4 / s, 1.1 / s, 1); root.add(tag);
+  tag.position.y = h + 0.85 / s; tag.scale.set(6.4 / s, 1.6 / s, 1); root.add(tag);
   if (champHas(cc, 'iron')) { // steel sheen: greyed, cool-glowing body (also what flashes / tints restore to)
     const steel = new THREE.Color(0xaabbd0);
     for (const m of o.model.mats) { m.color.lerp(steel, 0.45); m.emissive.setHex(0x1c2a3c); m.userData.e = 0x1c2a3c; }
@@ -504,8 +504,8 @@ function champTick(o, e, dt, T, spd) {
   const t = T + ch.ph, s = o.model.root.scale.x || 1, h = ch.h;
   ch.ring.material.opacity = 0.7 + 0.25 * Math.sin(t * 4);
   ch.arcs.rotation.z = t * 1.3;
-  ch.col.material.opacity = 0.3 + 0.12 * Math.sin(t * 2.6);
-  ch.pool.scale.setScalar((5 / s) * (1 + 0.08 * Math.sin(t * 3)));
+  ch.col.material.opacity = 0.13 + 0.05 * Math.sin(t * 2.6);
+  ch.pool.scale.setScalar((4.2 / s) * (1 + 0.08 * Math.sin(t * 3)));
   const n = ch.gems.length;
   ch.gems.forEach((g, i) => { const a = t * 1.8 + i * 6.283 / n; g.position.set(Math.sin(a) * 0.5, h + 0.28 + 0.06 * Math.sin(t * 4 + i), Math.cos(a) * 0.5); g.rotation.y = t * 3; });
   const fx = ch.fx, every = (k, iv) => { fx[k] = (fx[k] || 0) - dt; if (fx[k] > 0) return false; fx[k] = iv; return true; };
