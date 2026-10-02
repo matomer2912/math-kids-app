@@ -150,7 +150,7 @@ const LOOK_CANOPY = lookDataTex(64, n => {
 // ---------- shared uniforms (values set per world by applyThemeLighting in core.js) ----------
 const LOOK_U = {
   uLkTime: { value: 0 },
-  uLkMist: { value: new THREE.Vector4(0, -1.5, 0.8, 0) },     // density, y fully misty, y mist-free, -
+  uLkMist: { value: new THREE.Vector4(0, -1.5, 0.8, 1) },     // density, y fully misty, y mist-free, abyss fade 0..1
   uLkMistC: { value: new THREE.Color(0x8090a0) },
   uLkNoise: { value: LOOK_NOISE },
   uLkCanopy: { value: LOOK_CANOPY },
@@ -246,7 +246,7 @@ if (uLkMist.x > 0.0) {
   gl_FragColor.rgb = mix(gl_FragColor.rgb, uLkMistC, clamp(mf, 0.0, 0.92));
 }
 #endif
-gl_FragColor.rgb *= 1.0 - 0.9 * smoothstep(-1.2, -4.2, vLkW.y);              // abyss: deep chasms fade to black (water pits are shallow)
+gl_FragColor.rgb *= 1.0 - 0.9 * uLkMist.w * smoothstep(-1.2, -4.2, vLkW.y);   // abyss: deep chasms fade to black (water pits are shallow; off in the sky world: gfx.abyss 0)
 #include <tonemapping_fragment>`;
 const LOOK_LIGHTS = THREE.ShaderChunk.lights_fragment_begin
   .replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0')

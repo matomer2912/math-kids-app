@@ -128,7 +128,7 @@ const NEW_MOBS = { slime: 'slime', charger: 'charger', shield: 'guard', bomber: 
 //    mist [density, y fully misty, y mist-free, colour] ground mist pooled in pits and drifting over floors
 //    dapple 0..1 leaf-shadow / moonbeam pattern on the sun light, dappleScale its world scale (0.055) · rim [colour, strength, lift] character rim light
 //    gl glow-decal gain · amb/ambC ambient particle kind / colour · vig CSS vignette · hero hero light colour
-//    heroPool hero light-pool strength
+//    heroPool hero light-pool strength · abyss 0..1 deep chasms fade to black (default 1; 0 for open sky)
 //  look (surface treatment, read by look.js lookOf/buildLevel; every field optional, see LOOK_DEF):
 //    floor/corr tile names for rooms / corridors · patch + patchP big blob patches · wall, wallAlt + altP
 //    wall sides · top wall tops · cliff pit cliffs · rubble chance of broken wall tops · rubbleT/rubbleC
@@ -197,7 +197,7 @@ const THEMES = [
     light: 0xfff07a, carpet: 0x2a4ac0, carpet2: 0xffc72c, slime: 0xc8e8ff, guard: [0xc0c8d8, 0xffc72c], mage: [0x2a4ac0, 0xffe14a], totem: 0xe6e2ee, charger: 0x8a7ad0,
     // bright crisp day: warm sun from the left, cool blue sky fill and aerial haze, drifting cloud shadows, marble & gold
     gfx: { exp: 0.74, gl: 0.6, hemi: 0.44, sky: 0xb4d0ff, gnd: 0x7a7266, sun: [0xfff0d4, 1.65], sunDir: [-14, 16, 8], dapple: 0.4, dappleScale: 0.014,
-      fog: [20, 54], fogc: 0x8ab8ea, bg: 0x78aeea, mist: [0.16, -3.2, 0.45, 0xdceaff], amb: 'cloud', vig: 'rgba(30,60,120,.26)', rim: [0xfff0d8, 0.35, 0.04], hero: 0xfff4e0, heroPool: 0.1 },
+      fog: [20, 54], fogc: 0x8ab8ea, bg: 0x78aeea, mist: [0.16, -3.2, 0.45, 0xdceaff], amb: 'cloud', vig: 'rgba(30,60,120,.26)', rim: [0xfff0d8, 0.35, 0.04], hero: 0xfff4e0, heroPool: 0.1, abyss: 0 },
     look: { floor: ['marble', 'marble', 'slab', 'marble', 'slabCrack'], corr: ['tiles', 'slab', 'tiles'], wall: 'sandstone', wallAlt: 'templeWall', altP: 0.3, top: 'slabTop', rubbleT: 'rubble',
       rubbleC: 0xe8e2d4, cliff: 'rock', topVar: 0.3, rubble: 0.08, lip: 0x4a8a40, lipP: 0.18, lipT: 'leaf', ao: 0.7, aoR: 0.45, side: 0.82, base: 0.62, bright: 1.0 },
     boss: { name: 'The Storm Dragon', kind: 'dragon', body: 0x3a5cc8, accent: 0xffe14a, skin: 0x3a5cc8, eye: 0xffffff, sig: ['lightning', 'lightning', 'breath'] },
