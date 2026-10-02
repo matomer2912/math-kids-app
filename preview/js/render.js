@@ -229,7 +229,8 @@ function lerpAngle(a, b, t) { let d = b - a; d = Math.atan2(Math.sin(d), Math.co
 // ---------- effects ----------
 const fxList = [];
 function addFx(obj, life, upd) { scene.add(obj); fxList.push({ obj, t: 0, life, upd }); }
-function clearFx() { for (const f of fxList) trashObj(f.obj); fxList.length = 0; $('fx').innerHTML = ''; }
+const vfxOn = () => typeof VFX !== 'undefined' && VFX.on; // weapon effects system (vfx.js)
+function clearFx() { for (const f of fxList) trashObj(f.obj); fxList.length = 0; $('fx').innerHTML = ''; if (typeof VFX !== 'undefined') VFX.clear(); }
 function updateFx(dt) {
   for (let i = fxList.length - 1; i >= 0; i--) {
     const f = fxList[i]; f.t += dt;
@@ -237,12 +238,14 @@ function updateFx(dt) {
     if (k >= 1) { if (f.keep) scene.remove(f.obj); else trashObj(f.obj); fxList.splice(i, 1); continue; } // freed by gpuCollect
     f.upd && f.upd(f, k, dt);
   }
+  if (typeof VFX !== 'undefined') VFX.update(dt);
 }
 const ringGeo = new THREE.RingGeometry(0.86, 1, 40);
 const discGeo = new THREE.CircleGeometry(1, 32);
 const sectorCache = {};
 function basic(color, op) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }); }
 function slashFx(pid, ang, range, arc, rar) {
+  if (vfxOn()) { const o = vis.get('p' + pid); if (o && pid !== G.myId) o.atkT = 0.28; return; } // vfx.js draws the swing trail
   const key = range + '_' + arc;
   if (!sectorCache[key]) sectorCache[key] = new THREE.RingGeometry(range * 0.35, range, 16, 1, -Math.PI / 2 - arc / 2, arc);
   const o = vis.get('p' + pid);
@@ -284,6 +287,7 @@ function teleLineFx(x, z, ang, len, dur) {
   addFx(grp, dur, (f, k) => { m.material.opacity = 0.2 + 0.25 * Math.abs(Math.sin(f.t * 14)); });
 }
 function zapFx(x1, z1, x2, z2) {
+  if (vfxOn()) { sfx('zap'); return; } // vfx.js draws the bolt
   const pts = [new THREE.Vector3(x1, 1.2, z1)];
   for (let i = 1; i < 4; i++) { const t = i / 4; pts.push(new THREE.Vector3(x1 + (x2 - x1) * t + (Math.random() - 0.5), 1.2 + (Math.random() - 0.5) * 0.6, z1 + (z2 - z1) * t + (Math.random() - 0.5))); }
   pts.push(new THREE.Vector3(x2, 1.2, z2));
@@ -293,6 +297,7 @@ function zapFx(x1, z1, x2, z2) {
 }
 const partMats = {};
 function particles(x, z, color, n, s) {
+  if (vfxOn() && VFX.debris(x, z, color, n, s)) return; // pooled debris: one draw call for all of it
   if (fxList.length > 160) return;
   const mat = partMats[color] || (partMats[color] = new THREE.MeshBasicMaterial({ color, toneMapped: false }));
   for (let i = 0; i < n; i++) {
@@ -378,6 +383,7 @@ function playerPos(pid) {
 }
 
 function handleEvent(a) {
+  if (vfxOn()) VFX.onEvent(a);
   switch (a[0]) {
     case 'dmg': dmgNumber(a[1], a[2], a[3], a[4]); sfx('hit'); break;
     case 'slash': slashFx(a[1], a[2], a[3], a[4], a[5]); sfx('swing'); break;

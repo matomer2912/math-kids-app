@@ -46,6 +46,9 @@ const ENCH = {
   swift: { icon: '💨', adj: 'Swift',     desc: 'Attacks 25% faster' },
 };
 const ENCH_KEYS = Object.keys(ENCH);
+// enchant list -> bitmask (bit i = ENCH_KEYS[i]; only ever append to ENCH): sent with the player's static
+// snapshot data so every device can draw a hero's enchant effects (vfx.js)
+function enchMask(e) { let m = 0; if (e) for (const k of e) { const i = ENCH_KEYS.indexOf(k); if (i >= 0) m |= 1 << i; } return m; }
 
 const LEGEND_NAMES = {
   sword:   ['Sunfire Blade', 'Pharaoh\'s Fang', 'Dragonbone Sword', 'Starsplitter'],
