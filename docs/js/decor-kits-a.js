@@ -538,8 +538,8 @@ Object.assign(DECOR_KITS, {
     rules: [
       { p: 'iceSpire', at: 'void', d: 0.1, sp: 4, h: 5, rad: 0.9 },
       { p: 'pine', at: 'void', d: 0.22, sp: 3, h: 5.6, rad: 1.2 },
-      { p: 'icicles', at: 'faceN', d: 0.45, sp: 1, solo: 1 },
-      { p: 'icicles', at: 'faceSide', d: 0.2, sp: 2, solo: 1 },
+      { p: 'icicles', at: 'faceN', d: 0.34, sp: 1, solo: 1 },
+      { p: 'icicles', at: 'faceSide', d: 0.12, sp: 2, solo: 1 },
       { p: 'iceCrystals', at: 'cornerN', d: 0.55, sp: 4, in: 0.4, solo: 1 },
       { p: 'frozenPillar', at: 'cornerN', d: 0.3, sp: 4, h: 2.6, in: 0.55, solo: 1 },
       { p: 'brazier', at: 'cornerN', d: 0.18, sp: 7, h: 2.6, in: 0.5, solo: 1 },
