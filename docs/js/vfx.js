@@ -30,6 +30,7 @@ const VFX = (() => {
   // trail / spark colour per rarity: common is a warm steel white, the rest use the rarity colour
   const RCOL = [rgb(0xfff1d8), rgb(0x55b4ff), rgb(0xcf6cff), rgb(0xffc21a)];
   const RCORE = RCOL.map((c, i) => mixc(c, WHITE, i ? 0.55 : 0.2));
+  const REDGE = [rgb(0xffe2b0), rgb(0x2f86ff), rgb(0xa848ff), rgb(0xff8a00)]; // outer rim of a trail: deeper tone, reads on bright floors
   const RALPHA = [0.5, 0.62, 0.72, 0.82];
   const SPARK = [rgb(0xffe6a0), rgb(0x9fd6ff), rgb(0xe6a8ff), rgb(0xffd860)];
   const C = {
@@ -114,6 +115,24 @@ const VFX = (() => {
   const rMesh = new THREE.Mesh(rGeo, rMat);
   rMesh.frustumCulled = false; rMesh.renderOrder = 5; rMesh.visible = false; rMesh.name = 'vfxTrails';
 
+  // ---------- world brightness ----------
+  // On bright floors (sunlit sand, snow, sky marble) purely additive glows wash out, so there effects
+  // blend more like paint (less additive) and trails get a little more opaque. 0 = dark world, 1 = bright.
+  let brightKey = null, BR = 0, ADDK = 1;
+  function updBright() {
+    const T = G.theme, sun = typeof sunny !== 'undefined' && sunny;
+    const key = T ? T.name + (sun ? '+' : '') : '';
+    if (key === brightKey) return;
+    brightKey = key;
+    if (!T) return;
+    const L = T.gfx || {}, c = rgb(T.floor || 0x808080);
+    const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const B = lum * (0.45 * (L.sun ? L.sun[1] : 1) + (L.hemi || 0.8)) * (L.exp || 1) * (sun ? 1.5 : 1);
+    BR = clamp01((B - 0.3) / 0.5);
+    ADDK = 1 - 0.55 * BR;
+    rMat.uniforms.uAdd.value = 0.82 - 0.5 * BR;
+  }
+
   let added = false;
   function attach() { if (!added && typeof scene !== 'undefined') { scene.add(pMesh, rMesh); added = true; } }
 
@@ -172,7 +191,7 @@ const VFX = (() => {
   const TRAIL = {
     sword:   { R: 0.93, w: 0.95, dur: 0.1, fade: 0.15, y: 1.0, arc: 1.0 },
     hammer:  { R: 0.86, w: 1.55, dur: 0.15, fade: 0.17, y: 1.15, arc: 1.0 },
-    daggers: { R: 0.9, w: 0.42, dur: 0.06, fade: 0.09, y: 1.05, arc: 0.72 },
+    daggers: { R: 0.9, w: 0.55, dur: 0.06, fade: 0.1, y: 1.05, arc: 0.72 },
   };
   function slash(pid, ang, range, arc, rar) {
     const wp = weaponOf(pid); if (!wp) return;
@@ -345,7 +364,7 @@ const VFX = (() => {
     iPos[i3] = x; iPos[i3 + 1] = y; iPos[i3 + 2] = z;
     iDir[i3] = dx; iDir[i3 + 1] = dy; iDir[i3 + 2] = dz;
     iCol[i4] = col[0]; iCol[i4 + 1] = col[1]; iCol[i4 + 2] = col[2]; iCol[i4 + 3] = a;
-    iPar[i4] = s; iPar[i4 + 1] = sh; iPar[i4 + 2] = ad; iPar[i4 + 3] = w;
+    iPar[i4] = s; iPar[i4 + 1] = sh; iPar[i4 + 2] = ad * ADDK; iPar[i4 + 3] = w;
   }
 
   // weapon attach points in the weapon mesh's local space: [hilt, mid, tip]
@@ -371,13 +390,13 @@ const VFX = (() => {
     const med = q === 'medium';
     if (aura) { // soft glow + orbiting motes (legendary: gold, 3 motes + glints; epic: fainter purple, 2 motes)
       const leg = wp.r === 3, col = RCOL[wp.r];
-      quad(_m.x, _m.y, _m.z, 0, 0, 0, leg ? 0.78 : 0.56, 0, col, (leg ? 0.34 : 0.2) + 0.05 * Math.sin(T * 2.6 + p.id), 1, 0);
+      quad(_m.x, _m.y, _m.z, 0, 0, 0, leg ? 0.78 : 0.56, 0, col, ((leg ? 0.34 : 0.2) + 0.05 * Math.sin(T * 2.6 + p.id)) * (1 - 0.45 * BR), 1 / ADDK, 0);
       const n = leg ? (med ? 2 : 3) : (med ? 0 : 2), rr = leg ? 0.46 : 0.38;
       for (let i = 0; i < n; i++) {
         const a = T * (leg ? 2.8 : 2.2) + i * TAU / n + p.id;
         quad(_m.x + Math.cos(a) * rr, _m.y + Math.sin(a * 2 + i) * 0.16, _m.z + Math.sin(a) * rr, 0, 0, 0, leg ? 0.075 : 0.06, 0, leg ? RCORE[3] : RCORE[2], leg ? 0.95 : 0.7, 1, 0);
       }
-      if (wp.r === 3 && o.model.wmesh2) { _v.fromArray(pts[1]).applyMatrix4(o.model.wmesh2.matrixWorld); quad(_v.x, _v.y, _v.z, 0, 0, 0, 0.6, 0, col, 0.26, 1, 0); }
+      if (wp.r === 3 && o.model.wmesh2) { _v.fromArray(pts[1]).applyMatrix4(o.model.wmesh2.matrixWorld); quad(_v.x, _v.y, _v.z, 0, 0, 0, 0.6, 0, col, 0.26 * (1 - 0.45 * BR), 1 / ADDK, 0); }
       if (leg && !med) {
         const acc = heroAcc.get(p.id) || {}; heroAcc.set(p.id, acc);
         for (let i = emitN(acc, 'gl', 2.5, dt); i > 0; i--) {
@@ -392,7 +411,7 @@ const VFX = (() => {
     const along = () => { _v.copy(_h).lerp(_t, 0.25 + rnd() * 0.75); return _v; };
     if (em & E_FIRE) for (let i = emitN(acc, 'f', 8 * k, dt); i > 0; i--) {
       const v = along();
-      spawn(v.x + (rnd() - 0.5) * 0.12, v.y, v.z + (rnd() - 0.5) * 0.12, { vx: (rnd() - 0.5) * 0.4, vz: (rnd() - 0.5) * 0.4, vy: 0.9 + rnd() * 0.8, g: -0.8, dr: 1, life: 0.55 + rnd() * 0.35, s0: 0.085, s1: 0.02, col: C.ember[(rnd() * 3) | 0], a: 1, fi: 0.1 });
+      spawn(v.x + (rnd() - 0.5) * 0.12, v.y, v.z + (rnd() - 0.5) * 0.12, { vx: (rnd() - 0.5) * 0.4, vz: (rnd() - 0.5) * 0.4, vy: 0.9 + rnd() * 0.8, g: -0.8, dr: 1, life: 0.55 + rnd() * 0.35, s0: 0.1, s1: 0.025, col: C.ember[(rnd() * 3) | 0], a: 1, fi: 0.1 });
     }
     if (em & E_ICE) for (let i = emitN(acc, 'i', 5 * k, dt); i > 0; i--) {
       const v = along();
@@ -543,14 +562,14 @@ const VFX = (() => {
         const age = rb.t - rb.dur * easeInv(u);
         const k = clamp01(1 - age / rb.fade);
         const taper = 0.22 + 0.78 * k;
-        const al = rb.al * k * Math.sqrt(k);
+        const al = Math.min(0.95, rb.al * (1 + 0.22 * BR)) * k * Math.sqrt(k);
         const sx = Math.sin(ang), sz = Math.cos(ang);
         const rIn = rb.R - rb.w * taper, rCore = rb.R - rb.w * taper * 0.16;
-        const radii = [rIn, rCore, rb.R], alphas = [0, al, al * 0.45];
+        const radii = [rIn, rCore, rb.R], alphas = [0, al, al * 0.6];
         for (let w = 0; w < ROWS; w++) {
           const vi = vb + c * ROWS + w, p3 = vi * 3, p4 = vi * 4;
           rPos[p3] = rb.x + sx * radii[w]; rPos[p3 + 1] = rb.y; rPos[p3 + 2] = rb.z + sz * radii[w];
-          const col = w === 1 ? rb.core : rb.col;
+          const col = w === 1 ? rb.core : w === 2 ? REDGE[rb.rar] : rb.col;
           rCol[p4] = col[0]; rCol[p4 + 1] = col[1]; rCol[p4 + 2] = col[2]; rCol[p4 + 3] = alphas[w];
         }
       }
@@ -569,6 +588,7 @@ const VFX = (() => {
   const api = {
     on: true,
     stats: { p: 0, q: 0, r: 0 },
+    _dbg: { RB, P },
     // every game event (render.js handleEvent); legacy visuals are skipped by render.js where VFX draws them
     onEvent(a) {
       if (!api.on || !G.view) return;
@@ -587,6 +607,7 @@ const VFX = (() => {
       if (!api.on) { pMesh.visible = rMesh.visible = false; return; }
       attach();
       const q = tier();
+      updBright();
       nq = 0;
       const nr = writeRibbons(dt);
       const v = G.view;
