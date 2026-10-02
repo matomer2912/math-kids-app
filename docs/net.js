@@ -24,8 +24,6 @@
   var MAX_GUESTS = 3;            // host + 3 guests = 4 players
   var ICE_WAIT_MS = 2500;        // non-trickle ICE gathering timeout (offline)
   var ICE_WAIT_ONLINE_MS = 4000; // when online, give STUN/TURN time to answer
-  // Public helper servers so phones on different mobile networks can find each other.
-  // Unreachable servers (e.g. no signal in the desert) are simply skipped after the timeout.
   // Public helper servers so phones on different networks (home Wi-Fi + mobile data) can find each other.
   // STUN tells a phone its public address; TURN relays the game traffic when the routers can't be
   // punched through (mobile carrier NAT, Wi-Fi with client isolation). Unreachable servers (no signal in
@@ -1858,6 +1856,10 @@
     if (pairing && pairing.bus) pairing.bus.retryNow();
   });
   window.addEventListener('offline', function () { if (room) { room.key = null; roomRecalc(); } });
+  // Back from the background (Android may have killed the sockets): reconnect now, not after the backoff.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && room && room.bus) room.bus.retryNow();
+  });
 
   // Close connections cleanly when the page goes away so the other side notices fast.
   window.addEventListener('pagehide', function (e) {
