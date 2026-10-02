@@ -620,22 +620,34 @@ function buildLevel(map, theme) {
     if ((deco === 'jungle' || deco === 'crypt' || deco === 'pirate') && !tt[k] && v === T_FLOOR && blob(i + 11, j + 5, 2) > 0.8 && hash(i, j + 1) < 0.6) { const pc = LK.puddle || (deco === 'jungle' ? 0x3a8a9a : 0x5a7a9a); A.add(pc, 1.7, 0.02, 1.5, x, 0.02, z, hash(i, j) * 0.5); A.add(pc, 0.9, 0.025, 1.1, x + (hash(i + 1, j) - 0.5) * 1.2, 0.021, z + (hash(i, j + 1) - 0.5) * 1.0, hash(j, i) * 2); }
     // carpets / runners down the middle of corridors
     if (kind === 'corr' && map.corr[k] && walk(i - 1, j) && walk(i + 1, j) && walk(i, j - 1) && walk(i, j + 1) && !tt[k]) {
-      const hz = map.corr[k - 1] && map.corr[k + 1] && !(map.corr[k - W] && map.corr[k + W] && map.corr[k - W - 1] === 0);
-      const ver = map.corr[k - W] && map.corr[k + W] && !(map.corr[k - 1] && map.corr[k + 1]);
-      const sx = ver ? 1.3 : TILE, sz = hz && !ver ? 1.3 : TILE;
-      if (deco === 'desert') A.add(0xf2dfa8, sx, 0.02, sz, x, 0.015, z);
+      // corridor direction from how far the corridor runs each way (corridors are 3 tiles wide, so the
+      // middle tile has corridor on all four sides; the long axis is the direction of travel)
+      const run = (di, dj) => { let n = 0; for (let s2 = 1; s2 <= 4; s2++) { const ii = i + di * s2, jj = j + dj * s2; if (ii < 0 || jj < 0 || ii >= W || jj >= H || !map.corr[jj * W + ii]) break; n++; } return n; };
+      const hRun = run(-1, 0) + run(1, 0), vRun = run(0, -1) + run(0, 1);
+      const ver = vRun > hRun + 1, hz = hRun > vRun + 1;
+      const sx = ver ? 1.3 : TILE, sz = hz ? 1.3 : TILE;
+      if (!ver && !hz) { /* junction: no runner */ }
+      else if (deco === 'desert') A.add(0xf2dfa8, sx, 0.02, sz, x, 0.015, z);
       else if (deco !== 'jungle' && deco !== 'ice') {
-        L.add(theme.carpet2, sx + (ver ? 0.16 : 0), 0.025, sz + (hz && !ver ? 0.16 : 0), x, 0.012, z);
-        L.add(theme.carpet, sx - (ver ? 0.1 : 0), 0.03, sz - (hz && !ver ? 0.1 : 0), x, 0.016, z);
+        // y is the box centre: trim top at 0.03, carpet top at 0.06 (layers 0.03 apart -> no z-fighting)
+        L.add(theme.carpet2, sx + (ver ? 0.16 : 0), 0.06, sz + (hz ? 0.16 : 0), x, 0.0, z);
+        L.add(theme.carpet, sx - (ver ? 0.1 : 0), 0.12, sz - (hz ? 0.1 : 0), x, 0.0, z);
       }
     }
     // slow terrain overlays
     if (tt[k] === TT_SLOW) {
       const sc = theme.slow.c;
       if (theme.slow.web) {
-        A.add(0xffffff, 0.06, 0.03, 2.0, x, 0.03, z, 0.785); A.add(0xffffff, 0.06, 0.03, 2.0, x, 0.03, z, -0.785);
-        A.add(0xffffff, 0.06, 0.03, 2.0, x, 0.03, z, 0); A.add(0xffffff, 2.0, 0.03, 0.06, x, 0.03, z, 0);
-        L.add(0x9a9aa8, 2.0, 0.015, 2.0, x, 0.006, z);
+        // spider web: 8 spokes from the centre + 3 sagging rings; neighbouring tiles' webs join up
+        const rot0 = hash(i, j + 9) * 0.8;
+        for (let a = 0; a < 4; a++) A.add(0xffffff, 0.045, 0.03, 2.5, x, 0.035, z, rot0 + a * 0.785);
+        for (const R of [0.32, 0.6, 0.9]) {
+          for (let a = 0; a < 8; a++) {
+            const mid = rot0 + (a + 0.5) * 0.785, rr = R * (0.9 + 0.2 * hash(i * 8 + a, j + R * 10));
+            A.add(0xffffff, 0.765 * rr, 0.03, 0.045, x + Math.sin(mid) * rr * 0.92, 0.036, z + Math.cos(mid) * rr * 0.92, mid); // tangent ring piece
+          }
+        }
+        L.add(0x8a8a9a, 2.0, 0.012, 2.0, x, 0.005, z);
       } else {
         const stl = TL(deco === 'desert' ? 'sand' : deco === 'ice' || deco === 'sky' ? 'plain' : 'mud');
         L.add(sc, TILE, 0.04, TILE, x, 0.02, z, 0, 0.06, [stl, stl, 0, Math.floor(hash(i, j + 5) * 4)]);
@@ -932,12 +944,14 @@ function buildLevel(map, theme) {
 
 // Animate traps, lava, torches, shrines. Call every frame with t = Date.now() / 1000 (same clock as the host's trap damage).
 const _wc = new THREE.Color();
+const _spikeHot = new THREE.Color(0xff5a2a);
 function animateLevel(level, t) {
   const A = level && level.userData.anim; if (!A) return;
   for (const s of A.spikes) {
     const st = spikeState(s.q, t);
     s.spikes.position.y = st === 0 ? -0.5 : st === 1 ? -0.22 + 0.04 * Math.sin(t * 40) : 0.42;
-    s.plate.material.color.setHex(st === 1 ? ((t * 8) & 1 ? 0xff5a2a : 0x8a3a2a) : st === 2 ? 0xa02a20 : 0x55555c);
+    if (st === 1) s.plate.material.color.setHex(0x8a3a2a).lerp(_spikeHot, 0.5 + 0.5 * Math.sin(t * 14));
+    else s.plate.material.color.setHex(st === 2 ? 0xa02a20 : 0x55555c);
     s.spikes.material.color.setHex(st === 2 ? 0xff6a5a : 0xd8d8d8);
   }
   for (const v of A.vents) {

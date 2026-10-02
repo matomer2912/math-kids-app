@@ -810,6 +810,12 @@ function updateMe(dt) {
   if (me.downed && !wasDown) { sfx('down'); vibrate(200); }
   if (!me.downed && wasDown) { $('center').innerHTML = ''; showBanner('💪 Revived!'); }
   me.spCd -= dt; me.potCd -= dt; me.dodgeCd -= dt;
+  if (G.map.tt && G.slowHintFloor !== G.floor && terrainAt(G.map, me.x, me.z) === TT_SLOW) {
+    G.slowHintFloor = G.floor;
+    const sl = G.theme.slow || {};
+    const nm = sl.name || 'Sticky floor';
+    toast((sl.web ? '🕸️ ' : '🐌 ') + nm + (/s$/.test(nm) ? ' slow' : ' slows') + ' you down!');
+  }
   let mx = input.jx, mz = input.jz;
   const K = input.keys;
   if (K.KeyW || K.ArrowUp) mz -= 1; if (K.KeyS || K.ArrowDown) mz += 1;
