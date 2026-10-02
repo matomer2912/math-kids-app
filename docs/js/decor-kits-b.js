@@ -227,11 +227,17 @@
     const bx = (r() - 0.5) * cw * 0.12, bz = cw * (0.04 + r() * 0.05), seg = h > 1.2 ? 3 : 1, small = cw < 0.5;
     if (!small) b.box(shade(stem, 0.75), sw * 1.6, Math.min(0.5, h * 0.25), sw * 1.6, x, 0, z, { g: 0.4 });
     for (let k = 0; k < seg; k++) { const hh = h / seg; b.box(shade(stem, 0.88 + k * 0.07), sw * (1 - k * 0.12), hh + 0.02, sw * (1 - k * 0.12), x, y, z, { g: 0.3 }); x += bx; z += bz; y += hh; }
+    if (small) {   // little ones: the whole cap glows (one emissive box), a lit cap-top on it
+      b.box(glow, cw, cw * 0.22, cw, x, y - 0.03, z, { e: 1 });
+      b.box(cap, cw * 0.66, cw * 0.1, cw * 0.66, x, y - 0.03 + cw * 0.2, z, { g: 0 });
+      b.glow(2, x, y + cw * 0.1, z + 0.2, cw * 2.2, cw * 1.8, glow, 0.3, 0.03);
+      return [x, y, z, glow];
+    }
     b.box(glow, cw * 1.04, 0.08, cw * 1.04, x, y - 0.1, z, { e: 1 });                      // glowing gill rim
     b.box(cap, cw, cw * 0.18, cw, x, y - 0.03, z, { g: 0.35 });
     b.box(shade(cap, 1.12), cw * 0.84, cw * 0.13, cw * 0.84, x, y - 0.03 + cw * 0.18, z, { g: 0.15 });
     if (!small) b.box(shade(cap, 1.24), cw * 0.56, cw * 0.07, cw * 0.56, x, y - 0.03 + cw * 0.31, z, { g: 0 });
-    const ns = cw > 1.2 ? 6 : small ? 1 : 3;
+    const ns = cw > 1.2 ? 4 : 2;
     for (let s = 0; s < ns; s++) {
       const a = r() * TAU, inner = (s & 1) && !small, d = inner ? cw * (0.05 + r() * 0.18) : cw * (0.3 + r() * 0.1), ss = cw * (0.07 + r() * 0.05);
       b.box(spot, ss, 0.04, ss, x + Math.cos(a) * d, y - 0.03 + cw * (inner ? 0.38 : 0.31), z + Math.sin(a) * d, { e: 1 });
@@ -279,7 +285,7 @@
       for (let k = 0; k < seg; k++) {
         const y = -0.03 - (k + 1) * (len / seg), sw = 0.008 + k * 0.01;
         b.box(P.vine, 0.07, len / seg, 0.06, x + Math.sin(k + s) * 0.03, y, 0.05, { g: 0, sw, sb: sw + 0.01 });
-        if (k & 1) b.box(pick(P.berry, r), 0.1, 0.1, 0.1, x + 0.06, y, 0.1, { e: 1, sw, sb: sw });
+        if (k % 3 === 1 || k === seg - 1) b.box(pick(P.berry, r), 0.11, 0.11, 0.11, x + 0.06, y, 0.1, { e: 1, sw, sb: sw });
       }
     }
     b.box(jit(P.mossTop, r, 0.1), 1.6, 0.1, 0.5, (r() - 0.5) * 0.3, 0, -0.25, { g: 0 });
@@ -288,8 +294,8 @@
   D.shroomMoss = (b, r, P) => {
     const w = 0.6 + r() * 0.9;
     b.box(jit(P.moss, r, 0.12), w, 0.03, w * (0.6 + r() * 0.4), (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.5, { ry: r() * 3, g: 0 });
-    const n = 2 + Math.floor(r() * 4);
-    for (let s = 0; s < n; s++) b.box(pick(P.dot, r), 0.06, 0.04, 0.06, (r() - 0.5) * w * 0.8, 0.01, (r() - 0.5) * w * 0.5, { e: 1 });
+    const n = Math.floor(r() * 2.2);
+    for (let s = 0; s < n; s++) b.box(pick(P.dot, r), 0.07, 0.05, 0.07, (r() - 0.5) * w * 0.8, 0.01, (r() - 0.5) * w * 0.5, { e: 1 });
   };
   // rock spire cluster (void / wall tops), sometimes crystal tipped
   D.shroomStalag = (b, r, P) => {
@@ -559,10 +565,10 @@
       mist: { n: 30, c: 0x5a2ab0, i: 0.26, y: 0.3, s: [5, 9] },
       wisps: { c: 0x7affd8, n: 0.35 },
       rules: [
-        { p: 'shroomGiant', at: 'void', d: 0.3, sp: 3, h: 5.2, rad: 1.3, y: -0.5 },
+        { p: 'shroomGiant', at: 'void', d: 0.22, sp: 3, h: 5.2, rad: 1.3, y: -0.5 },
         { p: 'shroomStalag', at: 'void', d: 0.22, h: 3.6, rad: 0.7, y: -0.3 },
         { p: 'shroomShelf', at: 'faceN', d: 0.22, sp: 2, solo: 1 },
-        { p: 'shroomVines', at: 'faceN', d: 0.25, sp: 2, solo: 1 },
+        { p: 'shroomVines', at: 'faceN', d: 0.18, sp: 2, solo: 1 },
         { p: 'deadRoots', at: 'faceN', d: 0.08, sp: 3, solo: 1 },
         { p: 'shroomShelf', at: 'faceSide', d: 0.16, sp: 2, solo: 1 },
         { p: 'shroomVines', at: 'faceSide', d: 0.12, sp: 2, solo: 1 },
@@ -573,13 +579,13 @@
         { p: 'shroomCluster', at: 'edgeN', d: 0.14, sp: 2, in: 0.35 },
         { p: 'shroomCluster', at: 'edge', d: 0.05, in: 0.3 },
         { p: 'crystals', at: 'edge', d: 0.03, sp: 6, in: 0.3, solo: 1 },
-        { p: 'shroomMoss', at: 'edge', d: 0.3, in: 0.5 },
+        { p: 'shroomMoss', at: 'edge', d: 0.2, in: 0.5 },
         { p: 'rubble', at: 'edge', d: 0.08, in: 0.3 },
         { p: 'shroomMoss', at: 'floor', d: 0.06 },
         { p: 'shroomCluster', at: 'floor', d: 0.015 },
         { p: 'shroomCluster', at: 'wallTop', d: 0.07, h: 0.6 },
         { p: 'shroomStalag', at: 'wallTopN', d: 0.08, sp: 3, h: 2.0, rad: 0.5, s: [0.6, 0.8] },
-        { p: 'shroomMoss', at: 'wallTop', d: 0.3 },
+        { p: 'shroomMoss', at: 'wallTop', d: 0.14 },
         { p: 'rubble', at: 'wallTop', d: 0.1 },
         { p: 'shroomCluster', at: 'pitEdge', d: 0.18, in: 0.35 },
         { p: 'shroomBubbles', at: 'pit', d: 0.25 },
