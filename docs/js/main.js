@@ -96,6 +96,7 @@ function quitToMenu() {
   gpuCollect();
   document.body.classList.remove('ingame');
   $('hud').classList.add('hidden'); $('pause').classList.add('hidden'); $('inv').classList.add('hidden');
+  closeSheet();
   ['lobby', 'wait', 'join'].forEach(id => $(id) && $(id).classList.add('hidden'));
   $('menu').classList.remove('hidden');
   saveProfile();
@@ -272,7 +273,7 @@ function hostView() {
   for (const e of S.enemies) {
     if (e.hp <= 0) continue;
     if (!e.d.prop) V.k++;
-    V.enemies.push({ id: e.id, sk: SKINS[e.sk], x: e.x, z: e.z, f: e.f, hp: Math.round(100 * e.hp / e.maxHp), fl: Sim.eflags(e), size: e.size });
+    V.enemies.push({ id: e.id, sk: SKINS[e.sk], x: e.x, z: e.z, f: e.f, hp: Math.round(100 * e.hp / e.maxHp), fl: Sim.eflags(e), size: e.size, cc: e.cc || 0 });
   }
   for (const j of S.projs) V.projs.push({ id: j.id, k: j.k, x: j.x, z: j.z, vx: j.vx, vz: j.vz, col: j.col || 0 });
   for (const l of S.loot) if (l.owner === -1 || l.owner === G.myId) V.loot.push({ id: l.id, kind: l.kind, x: l.x, z: l.z, r: l.item ? l.item.r : 0, w: l.item ? l.item.w : '' });
@@ -298,9 +299,9 @@ function decodeSnap(m) {
   }
   for (const a of m.e || []) {
     const key = 'e' + a[0];
-    if (a.length > 6) statCache.set(key, { sk: SKINS[a[6]], size: a[7] / 20 });
+    if (a.length > 6) statCache.set(key, { sk: SKINS[a[6]], size: a[7] / 20, cc: a[8] | 0 });
     const st = statCache.get(key); if (!st) { needResync = true; continue; }
-    s.E.set(a[0], { id: a[0], sk: st.sk, x: a[1] / Q, z: a[2] / Q, f: a[3] / A, hp: a[4], fl: a[5], size: st.size });
+    s.E.set(a[0], { id: a[0], sk: st.sk, x: a[1] / Q, z: a[2] / Q, f: a[3] / A, hp: a[4], fl: a[5], size: st.size, cc: st.cc });
   }
   for (const a of m.j || []) {
     const key = 'j' + a[0];

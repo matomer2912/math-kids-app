@@ -100,11 +100,12 @@ function updateHUD(dt) {
   cdRing(h.spBtn, h.spBtnCd, h.spBtnT, me.spCd, W.scd);
   cdRing(h.ptBtn, h.ptBtnCd, h.ptBtnT, me.potCd, COOLDOWN.potion);
   cdRing(h.dgBtn, h.dgBtnCd, null, me.dodgeCd, rollCooldown(Profile.boosts));
-  // boss
-  if (v.boss) {
-    setCls(h.bossbar, 'hidden', false); setCls(h.hud, 'boss', true);
-    setTxt(h.bossname, v.boss[0]);
-    const pct = v.boss[1] / 10;
+  // boss (or a champion we are fighting: same big bar, orange, see champBarInfo in render.js)
+  const cb = !v.boss && champBarInfo(v);
+  if (v.boss || cb) {
+    setCls(h.bossbar, 'hidden', false); setCls(h.hud, 'boss', true); setCls(h.bossbar, 'champ', !!cb);
+    setTxt(h.bossname, cb ? cb.name : v.boss[0]);
+    const pct = cb ? cb.hp : v.boss[1] / 10;
     setW(h.bossfill, pct); setW(h.bosslag, pct); setTxt(h.bosspct, Math.ceil(pct) + '%');
   } else { setCls(h.bossbar, 'hidden', true); setCls(h.hud, 'boss', false); }
   // team cards: rebuild only when the roster changes, otherwise just bar widths
@@ -397,11 +398,12 @@ function refreshMenu() {
   if (cps.length > 1) {
     chips.insertAdjacentHTML('beforeend', '<span class="lbl">START AT</span>');
     cps.slice(-5).forEach(f => {
-      const b = document.createElement('button'); b.className = 'chip' + (f === G.startFloor ? ' on' : ''); b.textContent = 'Floor ' + f;
+      const b = document.createElement('button'); b.className = 'chip' + (f === G.startFloor ? ' on' : ''); b.innerHTML = '<span class="fw">Floor </span><span class="fs">F</span>' + f;
       b.onclick = () => { G.startFloor = f; refreshMenu(); };
       chips.appendChild(b);
     });
   }
+  if (typeof heroCardRefresh === 'function') heroCardRefresh(); // 3D portrait + HEROES button (heroes.js)
 }
 $('nameIn').addEventListener('input', e => { Profile.name = e.target.value.trim().slice(0, 12); saveProfile(); });
 $('soloBtn').onclick = () => { audioInit(); startGame('solo'); };
