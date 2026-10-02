@@ -181,14 +181,24 @@ const VFX = (() => {
     for (const p of v.players) if (p.id === pid) return p;
     return null;
   }
+  // rendered hero position (reused objects: called per particle / ribbon every frame)
+  const posC = new Map();
   function heroPos(pid) {
-    if (pid === G.myId) return { x: me.x, z: me.z };
-    const o = vis.get('p' + pid); if (o) return { x: o.x, z: o.z };
-    const p = viewPlayer(pid); return p ? { x: p.x, z: p.z } : null;
+    let c = posC.get(pid);
+    if (!c) { c = { x: 0, z: 0 }; posC.set(pid, c); }
+    if (pid === G.myId) { c.x = me.x; c.z = me.z; return c; }
+    const o = vis.get('p' + pid); if (o) { c.x = o.x; c.z = o.z; return c; }
+    const p = viewPlayer(pid); if (!p) return null;
+    c.x = p.x; c.z = p.z; return c;
   }
-  // weapon of a player: { w, r, em }
+  // weapon of a player: { w, r, em } (the local hero's is cached per equipped item)
+  let myIt = null, myW = null;
   function weaponOf(pid) {
-    if (pid === G.myId) { const it = equipped(); return { w: it.w, r: it.r, em: enchMask(it.e) }; }
+    if (pid === G.myId) {
+      const it = equipped();
+      if (it !== myIt || !myW || myW.w !== it.w || myW.r !== it.r) { myIt = it; myW = { w: it.w, r: it.r, em: enchMask(it.e) }; }
+      return myW;
+    }
     const p = viewPlayer(pid); return p ? { w: p.w, r: p.r | 0, em: p.em | 0 } : null;
   }
   const swingN = new Map(); // pid -> swing counter (alternating sword direction)
@@ -392,7 +402,7 @@ const VFX = (() => {
     const pts = WPT[wp.w]; if (!pts) return;
     const aura = wp.r >= 2, em = wp.em & (E_FIRE | E_ICE | E_ZAP | E_LEECH | E_BOOM | E_CRIT);
     if (!aura && !em) return;
-    o.obj.updateMatrixWorld(true); // this frame's pose (the renderer would only update it after us)
+    o.model.wmesh.updateWorldMatrix(true, false); // this frame's pose of the hand chain only (the renderer updates the rest later)
     const wm = o.model.wmesh.matrixWorld;
     _h.fromArray(pts[0]).applyMatrix4(wm); _m.fromArray(pts[1]).applyMatrix4(wm); _t.fromArray(pts[2]).applyMatrix4(wm);
     const med = q === 'medium';
@@ -408,7 +418,7 @@ const VFX = (() => {
         quad(x - tx, y, z - tz, tx, 0, tz, leg ? 0.07 : 0.055, 1, col, leg ? 0.9 : 0.7, 0.85, 0);
         quad(x, y, z, 0, 0, 0, leg ? 0.13 : 0.1, 0, RCORE[wp.r], leg ? 1 : 0.8, 0.85, 0);
       }
-      if (wp.r === 3 && o.model.wmesh2) { _v.fromArray(pts[1]).applyMatrix4(o.model.wmesh2.matrixWorld); quad(_v.x, _v.y, _v.z, 0, 0, 0, 0.6, 0, col, 0.26 * (1 - 0.45 * BR), 1 / ADDK, 0); }
+      if (wp.r === 3 && o.model.wmesh2) { o.model.wmesh2.updateWorldMatrix(true, false); _v.fromArray(pts[1]).applyMatrix4(o.model.wmesh2.matrixWorld); quad(_v.x, _v.y, _v.z, 0, 0, 0, 0.6, 0, col, 0.26 * (1 - 0.45 * BR), 1 / ADDK, 0); }
       if (leg && !med) {
         const acc = heroAcc.get(p.id) || {}; heroAcc.set(p.id, acc);
         for (let i = emitN(acc, 'gl', 2.5, dt); i > 0; i--) {
