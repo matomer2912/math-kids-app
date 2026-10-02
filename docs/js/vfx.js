@@ -58,7 +58,7 @@ const VFX = (() => {
         vCol = iCol; vUv = position.xy; vShape = iPar.y; vAdd = iPar.z; vW = iPar.w;
         float s = iPar.x;
         if (iPar.y > 1.5 && iPar.y < 3.5) { // flat on the ground
-          gl_Position = projectionMatrix * viewMatrix * vec4(iPos + vec3(position.x * s, 0.0, position.y * s), 1.0);
+          gl_Position = projectionMatrix * viewMatrix * vec4(iPos + vec3(position.x * s, 0.0, -position.y * s), 1.0); // -y: keep the front face up
           return;
         }
         vec4 mv = viewMatrix * vec4(iPos, 1.0);
