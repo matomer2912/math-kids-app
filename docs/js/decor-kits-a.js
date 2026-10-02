@@ -371,12 +371,11 @@ Object.assign(DPROP, {
   },
   icicles(b, r, P) {     // icicles hanging from the top edge of a wall face
     if (dkaFaceBusy(b)) return;
-    const H = b.H || 2, n = 4 + Math.floor(r() * 4);
+    const H = b.H || 2, n = 3 + Math.floor(r() * 4);
     for (let s = 0; s < n; s++) {
       const x = -0.85 + (s + r() * 0.6) * (1.7 / n), L = Math.min(H - 0.5, 0.3 + r() * 0.9), w = 0.1 + r() * 0.08, c = r() < 0.5 ? P.ice : P.ice2;
-      b.box(c, w, L * 0.45, w, x, -L * 0.45 - 0.02, 0.14, { g: 0 });
-      b.box(shade(c, 1.08), w * 0.66, L * 0.35, w * 0.66, x, -L * 0.8 - 0.02, 0.14, { g: 0 });
-      b.box(shade(c, 1.16), w * 0.34, L * 0.2, w * 0.34, x, -L - 0.02, 0.14, { g: 0 });
+      b.box(c, w, L * 0.55, w, x, -L * 0.55 - 0.02, 0.14, { g: 0 });
+      b.box(shade(c, 1.12), w * 0.45, L * 0.45, w * 0.45, x, -L - 0.02, 0.14, { g: 0 });
     }
     if (r() < 0.4) { b.box(P.crystal2, 0.06, 0.12, 0.06, (r() - 0.5) * 1.2, -0.5, 0.17, { e: 1 }); }
   },
@@ -434,7 +433,7 @@ Object.assign(DPROP, {
 });
 
 // tall props cast shadows (the rest only receive: keeps the shadow pass cheap)
-for (const n of ['brazierD', 'obeliskS', 'statueBroken', 'palm', 'jackal', 'sandColumn', 'forgeBrazier', 'anvilF', 'obsidianSpire', 'crucible', 'frozenPillar', 'pine']) DECOR_CAST.add(n);
+for (const n of ['brazierD', 'obeliskS', 'statueBroken', 'palm', 'jackal', 'sandColumn', 'forgeBrazier', 'anvilF', 'obsidianSpire', 'crucible', 'frozenPillar']) DECOR_CAST.add(n);
 
 Object.assign(DECOR_KITS, {
   desert: {
@@ -555,7 +554,7 @@ Object.assign(DECOR_KITS, {
       { p: 'snowTop', at: 'floor', d: 0.03, s: [0.6, 0.8] },
       { p: 'iceCrystals', at: 'wallTopN', d: 0.08, sp: 4, h: 1.4, solo: 1 },
       { p: 'iceCrystals', at: 'wallTopSide', d: 0.05, sp: 5, h: 1.4, solo: 1 },
-      { p: 'snowTop', at: 'wallTop', d: 0.55 },
+      { p: 'snowTop', at: 'wallTop', d: 0.45 },
       { p: 'rubble', at: 'wallTop', d: 0.1 },
       { p: 'snowDrift', at: 'pitEdge', d: 0.25, in: 0.3, s: [0.6, 0.8] },
       { p: 'iceFloe', at: 'pit', d: 0.35 },
