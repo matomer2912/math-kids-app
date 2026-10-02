@@ -345,48 +345,14 @@ function setSkin(id) {
   toastShop(heroSkin(id).icon + ' Looking good, <b>' + esc(heroSkin(id).name) + '</b>!');
   renderShop();
 }
-// 3D turntable preview of an outfit (rendered off-screen with the main renderer, ~12 fps)
-const skinPv = { scene: null, cam: null, rt: null, mdl: null, key: null, buf: null, img: null };
+// 3D turntable preview of an outfit (~12 fps; HeroPv in heroes.js renders it off-screen with the main renderer)
 function drawSkinPreview(dt) {
   const pv = shop.preview, cv = $('skPrev');
   if (!pv || !cv || !shop.open || shop.tab !== 'skins') return;
   pv.t += dt;
   if (pv.last >= 0 && pv.t - pv.last < 0.08) return;
   pv.last = pv.t;
-  try {
-    const W = cv.width, H = cv.height;
-    if (!skinPv.scene) {
-      skinPv.scene = new THREE.Scene();
-      skinPv.scene.add(new THREE.HemisphereLight(0xfff4dd, 0x5a4026, 1.0));
-      const dl = new THREE.DirectionalLight(0xffffff, 0.6); dl.position.set(2, 4, 5); skinPv.scene.add(dl);
-      skinPv.cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 50); skinPv.cam.position.set(0, 1.7, 5.4); skinPv.cam.lookAt(0, 1.05, 0);
-      skinPv.rt = new THREE.WebGLRenderTarget(W, H);
-      skinPv.rt.texture.encoding = renderer.outputEncoding;
-      skinPv.buf = new Uint8Array(W * H * 4);
-    }
-    const key = pv.skin + '|' + Profile.color;
-    if (skinPv.key !== key) {
-      if (skinPv.mdl) trashObj(skinPv.mdl.root);
-      skinPv.mdl = buildPlayerModel(Profile.color, pv.skin);
-      setWeapon(skinPv.mdl, equipped().w, equipped().r);
-      skinPv.mdl.ring.visible = false;
-      skinPv.scene.add(skinPv.mdl.root); skinPv.key = key;
-    }
-    skinPv.mdl.root.rotation.y = 0.5 + pv.t * 1.1;
-    animateModel(skinPv.mdl, 0.08, 0, 0, 0, pv.t);
-    const prevBg = skinPv.scene.background; skinPv.scene.background = null;
-    renderer.setRenderTarget(skinPv.rt);
-    renderer.setClearColor(0x000000, 0); renderer.clear();
-    renderer.render(skinPv.scene, skinPv.cam);
-    renderer.readRenderTargetPixels(skinPv.rt, 0, 0, W, H, skinPv.buf);
-    renderer.setRenderTarget(null);
-    skinPv.scene.background = prevBg;
-    const ctx = cv.getContext('2d');
-    if (!skinPv.img || skinPv.img.width !== W) skinPv.img = ctx.createImageData(W, H);
-    const d = skinPv.img.data, b = skinPv.buf, row = W * 4;
-    for (let y = 0; y < H; y++) d.set(b.subarray((H - 1 - y) * row, (H - y) * row), y * row); // flip rows
-    ctx.putImageData(skinPv.img, 0, 0);
-  } catch (e) { shop.preview = null; }
+  if (!HeroPv.draw(cv, { color: Profile.color, skin: pv.skin, wpn: equipped() }, { rot: 0.5 + pv.t * 1.1, t: pv.t })) shop.preview = null;
 }
 
 // ---------- battle potions: quick-use button + buff timers ----------

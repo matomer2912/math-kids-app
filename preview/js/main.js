@@ -96,6 +96,7 @@ function quitToMenu() {
   gpuCollect();
   document.body.classList.remove('ingame');
   $('hud').classList.add('hidden'); $('pause').classList.add('hidden'); $('inv').classList.add('hidden');
+  closeSheet();
   ['lobby', 'wait', 'join'].forEach(id => $(id) && $(id).classList.add('hidden'));
   $('menu').classList.remove('hidden');
   saveProfile();
