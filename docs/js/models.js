@@ -16,7 +16,7 @@ function bx(parent, w, h, d, x, y, z, m) {
   const me = new THREE.Mesh(BOXG, m); me.scale.set(w + e, h + e, d + e); me.position.set(x, y, z); parent.add(me); return me;
 }
 function addShadow(root, r) {
-  const s = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT); s.rotation.x = -Math.PI / 2; s.position.y = 0.02; s.scale.setScalar(r); root.add(s);
+  const s = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT); s.rotation.x = -Math.PI / 2; s.position.y = 0.09; s.scale.setScalar(r); root.add(s); // above floor dressing (runners top out at 0.06)
 }
 
 // ---------- weapons ----------
@@ -115,7 +115,7 @@ function buildPlayerModel(colorHex, skin) {
   mdl.cape = cape;
   // colored ring under player for easy identification
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.9, 20), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.04; mdl.root.add(ring);
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.11; mdl.root.add(ring);
   mdl.ring = ring;
   mdl.skin = skin || '';
   if (skin && HERO_OUTFITS[skin]) HERO_OUTFITS[skin](mdl, c);
@@ -657,7 +657,7 @@ function buildLootModel(kind, rar, w) {
     const beam = new THREE.Mesh(BOXG, new THREE.MeshBasicMaterial({ color: RAR[rar].hex, transparent: true, opacity: 0.35, depthWrite: false }));
     beam.scale.set(0.35, 7, 0.35); beam.position.y = 3.5; g.add(beam);
     const base = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.75, 16), new THREE.MeshBasicMaterial({ color: RAR[rar].hex, side: THREE.DoubleSide }));
-    base.rotation.x = -Math.PI / 2; base.position.y = 0.05; g.add(base);
+    base.rotation.x = -Math.PI / 2; base.position.y = 0.1; g.add(base);
   } else if (kind === 'coin') {
     bx(inner, 0.35, 0.35, 0.1, 0, 0.5, 0, new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0x664400 }));
   } else if (kind === 'heart') {

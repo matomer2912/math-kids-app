@@ -51,6 +51,11 @@ const AA = (() => {
   return true;
 })();
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: AA, powerPreference: 'high-performance' });
+// pixel textures: linear filtering + pixel-art AA in the level shader (look.js) instead of nearest
+// sampling, which crawled/shimmered while moving. Needs fwidth -> WebGL2 only (else stays nearest).
+if (renderer.capabilities.isWebGL2 && typeof LOOK_ATLAS !== 'undefined') {
+  LOOK_AA_ON = true; LOOK_ATLAS.magFilter = LOOK_ATLAS.minFilter = THREE.LinearFilter; LOOK_ATLAS.needsUpdate = true;
+}
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
