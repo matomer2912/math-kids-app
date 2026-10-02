@@ -206,7 +206,7 @@
   };
   D.skyPetals = (b, r, P) => {   // petals strewn on the floor
     const n = 3 + Math.floor(r() * 4);
-    for (let s = 0; s < n; s++) b.box(pick(P.petal, r), 0.12, 0.012, 0.09, (r() - 0.5) * 1.4, 0, (r() - 0.5) * 1.0, { ry: r() * 3, g: 0 });
+    for (let s = 0; s < n; s++) b.box(pick(P.petal, r), 0.12, 0.012, 0.09, (r() - 0.5) * 1.4, (s % 3) * 0.03, (r() - 0.5) * 1.0, { ry: r() * 3, g: 0 });
   };
   D.skyRing = (b, r, P) => {     // around columns / statues
     for (let s = 0; s < 4; s++) {
@@ -293,9 +293,10 @@
   // luminous moss patch
   D.shroomMoss = (b, r, P) => {
     const w = 0.6 + r() * 0.9;
-    b.box(jit(P.moss, r, 0.12), w, 0.03, w * (0.6 + r() * 0.4), (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.5, { ry: r() * 3, g: 0 });
+    const py = Math.floor(r() * 3) * 0.03;
+    b.box(jit(P.moss, r, 0.12), w, 0.03, w * (0.6 + r() * 0.4), (r() - 0.5) * 0.5, py, (r() - 0.5) * 0.5, { ry: r() * 3, g: 0 });
     const n = Math.floor(r() * 2.2);
-    for (let s = 0; s < n; s++) b.box(pick(P.dot, r), 0.07, 0.05, 0.07, (r() - 0.5) * w * 0.8, 0.01, (r() - 0.5) * w * 0.5, { e: 1 });
+    for (let s = 0; s < n; s++) b.box(pick(P.dot, r), 0.07, 0.05, 0.07, (r() - 0.5) * w * 0.8, py + 0.01, (r() - 0.5) * w * 0.5, { e: 1 });
   };
   // rock spire cluster (void / wall tops), sometimes crystal tipped
   D.shroomStalag = (b, r, P) => {
@@ -323,7 +324,7 @@
       b.push(Math.cos(a) * 0.82, 0, Math.sin(a) * 0.82, r() * 3, 0.8); (s & 1 ? D.shroomCluster : D.shroomMoss)(b, r, P); b.pop();
     }
   };
-  D.shroomMossRing = (b, r, P) => { for (let s = 0; s < 2; s++) { const a = r() * TAU; b.push(Math.cos(a) * 0.7, 0, Math.sin(a) * 0.7, r() * 3, 0.8); D.shroomMoss(b, r, P); b.pop(); } };
+  D.shroomMossRing = (b, r, P) => { for (let s = 0; s < 2; s++) { const a = r() * TAU; b.push(Math.cos(a) * 0.7, s * 0.03, Math.sin(a) * 0.7, r() * 3, 0.8); D.shroomMoss(b, r, P); b.pop(); } };
 
   // ======================= Pirate Cove =======================
   function barrel(b, r, P, x, y, z, side) {
@@ -486,7 +487,7 @@
   // foam streaks / wave crests on the water
   D.pirateFoam = (b, r, P) => {
     const n = 2 + Math.floor(r() * 3);
-    for (let s = 0; s < n; s++) { const L = 0.5 + r() * 1.2; b.box(s & 1 ? P.foam : P.foam2, L, 0.025, 0.08 + r() * 0.08, (r() - 0.5) * 1.3, 0.01 * s, (r() - 0.5) * 1.3, { ry: (r() - 0.5) * 0.6, g: 0 }); }
+    for (let s = 0; s < n; s++) { const L = 0.5 + r() * 1.2; b.box(s & 1 ? P.foam : P.foam2, L, 0.025, 0.08 + r() * 0.08, (r() - 0.5) * 1.3, 0.03 * s, (r() - 0.5) * 1.3, { ry: (r() - 0.5) * 0.6, g: 0 }); }
     if (r() < 0.4) b.mote(2, 0, 0.1, 0, P.spray, 0.14, 0.7 + r() * 0.5);
   };
   // kelp / seaweed strands
@@ -502,7 +503,7 @@
   // a little spilled treasure: coins + a glint
   D.pirateGold = (b, r, P) => {
     const n = 5 + Math.floor(r() * 5);
-    for (let s = 0; s < n; s++) { const a = r() * TAU, d = r() * 0.4; b.box(jit(P.gold, r, 0.08), 0.13, 0.03 + (s < 3 ? 0.06 : 0), 0.13, Math.cos(a) * d, 0, Math.sin(a) * d, { ry: r(), g: 0.1 }); }
+    for (let s = 0; s < n; s++) { const a = r() * TAU, d = r() * 0.4; b.box(jit(P.gold, r, 0.08), 0.13, 0.03 + (s < 3 ? 0.06 : 0), 0.13, Math.cos(a) * d, (s % 4) * 0.03, Math.sin(a) * d, { ry: r(), g: 0.1 }); }
     b.box(P.glint, 0.05, 0.05, 0.05, 0.05, 0.1, 0.02, { e: 1 });
     b.glow(0, 0, 0.04, 0, 1.4, 1.4, P.gold, 0.2, 0.05);
   };
