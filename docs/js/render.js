@@ -463,9 +463,10 @@ function updateLights(dt) {
     const r = Math.round(_lt.dot(_lr) / texel) * texel, u = Math.round(_lt.dot(_lu) / texelV) * texelV, d = _lt.dot(_ld);
     _lt.copy(_lr).multiplyScalar(r).addScaledVector(_lu, u).addScaledVector(_ld, d);
     sun.target.position.copy(_lt); sun.position.copy(_lt).add(SUN_OFF);
-    // shadow map refresh at half the frame rate (halves the shadow pass cost; 1 frame of lag is invisible)
-    renderer.shadowMap.autoUpdate = false;
-    if ((shadowTick = (shadowTick + 1) % 2) === 0 || lastLevel !== G.level) renderer.shadowMap.needsUpdate = true;
+    // shadow map refresh every frame: a half-rate refresh made animated casters (flames, heroes, enemies)
+    // alternate between a fresh and a stale shadow, which showed as flicker (measured: ~25x more
+    // flickering pixels). Slow phones still step down to Medium/Low automatically.
+    renderer.shadowMap.autoUpdate = true;
   } else { sun.target.position.set(fx, 0, fz); sun.position.set(fx, 0, fz).add(SUN_OFF); }
   heroLight.position.set(me.x, 3.2, me.z + 0.6);
   const lv = G.level;

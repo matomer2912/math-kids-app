@@ -39,7 +39,18 @@ THREE.ColorManagement.legacyMode = false;
 				texture2DCompare( shadowMap, shadowCoord.xy + vec2( - o.x, o.y ), shadowCoord.z ) + texture2DCompare( shadowMap, shadowCoord.xy + vec2( o.x, o.y ), shadowCoord.z ) );` + c.slice(b + end.length);
 }
 const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+// MSAA smooths thin foliage/edges that otherwise shimmer while moving; cheap on phones' tile GPUs.
+// Chosen at start-up (it can't change later): off for Low / battery saver / low-end auto devices.
+const AA = (() => {
+  try {
+    if (localStorage.getItem('dd_low') === '1') return false;
+    const p = localStorage.getItem('dd_gfx') || 'auto';
+    if (p === 'low') return false;
+    if (p === 'auto' && ((navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 3)) return false;
+  } catch (e) { }
+  return true;
+})();
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: AA, powerPreference: 'high-performance' });
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
@@ -52,7 +63,9 @@ let soundOn = localStorage.getItem('dd_snd') !== '0';
 let prCap = 1.25;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c130a);
-const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 140);
+// near plane well away from the lens: the closest geometry is ~9 units away, and a larger near value
+// gives phones (16/24-bit depth) far more depth precision -> no z-fighting flicker
+const camera = new THREE.PerspectiveCamera(45, 1, 2.5, 140);
 // Camera: fixed orientation (pitch ~58°), only translates. CAM_OFF is the camera position relative to
 // the local hero; its z is recomputed in resize() so the hero sits near the middle of the visible ground
 // (with a perspective camera the ground below the look point is much shorter than above it).
@@ -109,7 +122,7 @@ function gfxApply(force) {
   renderer.shadowMap.type = T.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   sun.castShadow = T.shadow > 0;
   if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-  if (T.shadow) sun.shadow.mapSize.set(T.shadow, T.shadow);
+  if (T.shadow) { sun.shadow.mapSize.set(T.shadow, T.shadow); sun.shadow.normalBias = 0.07 * (1024 / T.shadow); sun.shadow.bias = -0.0008; }
   if (typeof SHADOW_MAT !== 'undefined') SHADOW_MAT.visible = !T.shadow; // blob shadows only without real ones
   while (pointPool.length > T.lights) { const p = pointPool.pop(); scene.remove(p.light); }
   while (pointPool.length < T.lights) { const l = new THREE.PointLight(0xffaa55, 0, 9, 2); l.position.set(0, -50, 0); scene.add(l); pointPool.push({ light: l, c: null, k: 0, out: false }); }
