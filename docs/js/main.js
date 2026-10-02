@@ -267,7 +267,7 @@ function hostView() {
   const S = Sim.S, V = { fl: S.floor, players: [], enemies: [], projs: [], loot: [], boss: 0, po: S.portalOpen ? 1 : 0, pn: S.portalNear || 0, pt: Sim.portalTenths(), k: 0 };
   for (const p of S.players.values()) {
     const pv = p.id === G.myId ? me : hostPV.get(p.id) || p;
-    V.players.push({ id: p.id, x: pv.x, z: pv.z, f: pv.f, hp: Math.round(p.hp), maxHp: p.maxHp, downed: p.downed, atk: p.atkAnim > 0, w: p.wpn.w, r: p.wpn.r, color: p.color, lvl: p.lvl, name: p.name, rev: p.revive, aim: p.aim || p.f, skin: p.skin || '', bf: Sim.pflags(p) >> 7 });
+    V.players.push({ id: p.id, x: pv.x, z: pv.z, f: pv.f, hp: Math.round(p.hp), maxHp: p.maxHp, downed: p.downed, atk: p.atkAnim > 0, w: p.wpn.w, r: p.wpn.r, em: enchMask(p.wpn.e), color: p.color, lvl: p.lvl, name: p.name, rev: p.revive, aim: p.aim || p.f, skin: p.skin || '', bf: Sim.pflags(p) >> 7 });
   }
   for (const e of S.enemies) {
     if (e.hp <= 0) continue;
@@ -292,9 +292,9 @@ function decodeSnap(m) {
   const s = { q: m.q, tm: m.tm, fl: m.fl, b: m.b, po: m.po, pn: m.pn, pt: m.pt || 0, k: m.k, P: new Map(), E: new Map(), J: new Map(), L: new Map() };
   for (const a of m.p || []) {
     const key = 'p' + a[0];
-    if (a.length > 7) statCache.set(key, { maxHp: a[7], w: a[8], r: a[9], color: a[10], lvl: a[11], name: a[12], skin: a[13] || '' });
+    if (a.length > 7) statCache.set(key, { maxHp: a[7], w: a[8], r: a[9], color: a[10], lvl: a[11], name: a[12], skin: a[13] || '', em: a[14] | 0 });
     const st = statCache.get(key); if (!st) { needResync = true; continue; }
-    s.P.set(a[0], { id: a[0], x: a[1] / Q, z: a[2] / Q, f: a[3] / A, hp: a[4], maxHp: st.maxHp, downed: !!(a[5] & 1), atk: !!(a[5] & 2), rev: ((a[5] >> 2) & 31) / 10, bf: (a[5] >> 7) & 7, aim: a[6] / A, w: st.w, r: st.r, color: st.color, lvl: st.lvl, name: st.name, skin: st.skin });
+    s.P.set(a[0], { id: a[0], x: a[1] / Q, z: a[2] / Q, f: a[3] / A, hp: a[4], maxHp: st.maxHp, downed: !!(a[5] & 1), atk: !!(a[5] & 2), rev: ((a[5] >> 2) & 31) / 10, bf: (a[5] >> 7) & 7, aim: a[6] / A, w: st.w, r: st.r, em: st.em, color: st.color, lvl: st.lvl, name: st.name, skin: st.skin });
   }
   for (const a of m.e || []) {
     const key = 'e' + a[0];

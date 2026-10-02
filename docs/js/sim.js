@@ -430,7 +430,8 @@ const Sim = (() => {
     }
     amt = Math.max(1, Math.round(amt));
     e.hp -= amt; e.flash = 0.12;
-    if (!e.d.prop) ev('dmg', r1(e.x), r1(e.z), amt, opt.crit ? 1 : 0);
+    // direct weapon hits also carry the attacker id (vfx.js draws that hero's weapon/enchant impact)
+    if (!e.d.prop) { if (opt.ang !== undefined && !opt.aoe && src >= 0) ev('dmg', r1(e.x), r1(e.z), amt, opt.crit ? 1 : 0, src); else ev('dmg', r1(e.x), r1(e.z), amt, opt.crit ? 1 : 0); }
     if (!e.awake) wake(e);
     if (opt.kb && e.type !== 'boss' && !e.d.prop && !e.d.still) {
       const k = opt.kb / (e.type === 'brute' || e.elite ? 2.5 : 1);
@@ -1373,7 +1374,7 @@ const Sim = (() => {
   // Only entities within INTEREST_R of the guest are included (players always), nearest first.
   // Static per-entity data is appended only while the guest may not have it yet:
   //   p: [id, x, z, f, hp, flags(1 downed, 2 attacking, revive*10 << 2 (5 bits), 128 rage, 256 swift, 512 iron), aim]
-  //      + [maxHp, wpn, rarity, color, lvl, name, skin]
+  //      + [maxHp, wpn, rarity, color, lvl, name, skin, enchant mask (enchMask)]
   //   e: [id, x, z, f, hp%, flags(1 wind, 2 flash, 4 burn, 8 slow, 16 elite, 32 awake)] + [skin index (SKINS), size*20]
   //   j: [id, x, z] + [kind index (PROJ_KINDS), vx*QV, vz*QV, col]
   //   l: [id, x, z] + [kind, rarity, weapon]
@@ -1385,7 +1386,7 @@ const Sim = (() => {
   const qp = v => Math.round(v * QP);
   const qa = v => Math.round(Math.atan2(Math.sin(v), Math.cos(v)) * QA);
   function eflags(e) { return (e.st === 'wind' ? 1 : 0) | (e.flash > 0 ? 2 : 0) | (e.burn > 0 ? 4 : 0) | (e.slow > 0 ? 8 : 0) | (e.elite ? 16 : 0) | (e.awake ? 32 : 0); }
-  function playerSig(p) { return [p.maxHp, p.wpn.w, p.wpn.r, p.color, p.lvl, p.name, p.skin || '']; }
+  function playerSig(p) { return [p.maxHp, p.wpn.w, p.wpn.r, p.color, p.lvl, p.name, p.skin || '', enchMask(p.wpn.e)]; }
   function pflags(p) { let f = (p.downed ? 1 : 0) | (p.atkAnim > 0 ? 2 : 0) | (Math.min(31, Math.round(p.revive * 10)) << 2); BUFF_KEYS.forEach((k, i) => { if (p.buffs[k] > 0) f |= 128 << i; }); return f; }
   function snapshot(forId, g, maxE, maxJ, view) {
     const fp = S.players.get(forId);
