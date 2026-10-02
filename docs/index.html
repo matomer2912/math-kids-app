@@ -726,7 +726,7 @@ button.avatar:active { transform:translateY(2px) scale(.96); }
 .shtile .bn { position:absolute; top:-7px; right:-4px; padding:0 4px; border-radius:6px; background:#14521f; border:1.5px solid #6cff84; font-family:var(--fd); font-size:11px; line-height:14px; color:#c6ffb8; text-transform:none; letter-spacing:0; }
 .shstats .wprev { margin-top:0; padding:4px 10px 4px 5px; }
 .shstats .wprev .wi { width:40px; height:40px; font-size:25px; }
-.shstats .wprev .ench { margin-top:2px; }
+.shstats .wprev .ench { margin-top:2px; } .shstats .wprev .wn span { display:block; } .shstats .wprev .cnone { margin-top:1px; opacity:.8; }
 .shbst { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
 .sbst { min-width:0; padding:2px 6px 4px; border-radius:8px; background:rgba(0,0,0,.32); border:1.5px solid rgba(201,150,60,.45); }
 .sbst.none { opacity:.55; }
@@ -747,6 +747,13 @@ button.avatar:active { transform:translateY(2px) scale(.96); }
   .shstats .wprev .wi { width:36px; height:36px; font-size:22px; } .shstats .wprev .wn b { font-size:15px; } .shstats .wprev .pow b { font-size:22px; }
 }
 @media (max-width:640px) { .hsub { display:none; } .shtiles, .shbst { grid-template-columns:repeat(2,1fr); } }
+/* portrait phones: hero on top, stats scroll underneath (side by side was too cramped) */
+@media (max-width:640px) and (orientation:portrait) {
+  #sheet > .panel { height:min(640px,100%); }
+  .shbody { flex-direction:column; } .shpv { flex:0 0 190px; max-width:none; margin:8px 8px 0; }
+  .shstats { padding:8px 10px 10px; } .shxpl { white-space:normal; }
+  .shstats .wprev .wn b { white-space:normal; } .shstats .wprev .wn span { white-space:normal; }
+}
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; } }
 </style>
