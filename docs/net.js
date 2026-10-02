@@ -3,16 +3,19 @@
  * WebRTC DataChannels: one RTCPeerConnection per guest with two negotiated channels,
  * 'r' (reliable, ordered) and 'u' (unreliable: unordered, maxRetransmits 0).
  * Two ways to connect:
- *  1. Room code (needs signal at join time). The host registers "desertdungeons-<CODE>-host"
- *     on the free PeerJS cloud signaling server; guests type the 4-letter code, scan the lobby
- *     QR, or open the #join=CODE link. PeerJS only relays the SDP/ICE messages; the data path
- *     is our own RTCPeerConnection (direct over the hotspot LAN, via STUN, or a TURN relay).
+ *  1. Room code (needs internet at join time). Guests type the 4-letter code, scan the lobby QR,
+ *     or open the #join=CODE link. The tiny signaling messages (join / SDP offer+answer / trickled
+ *     ICE candidates) travel over several free servers at once — PeerJS cloud, WebTorrent trackers
+ *     and public MQTT brokers — so one dead or blocked server doesn't matter (see "signaling
+ *     transports" below). The data path is our own RTCPeerConnection (direct over the LAN/hotspot,
+ *     via STUN hole punching, or through a TURN relay).
  *  2. Offline QR (no signal needed): host shows offer QR -> guest scans,
  *     guest shows answer QR -> host scans. The QR payload is a compact string,
  *     not raw SDP; each side rebuilds a minimal data-channel-only SDP.
  *
  * Needs (globals, loaded before this file): qrcode (qrcode-generator), jsQR (fallback scanner),
- * Peer (lib/peerjs.min.js; only used for room codes).
+ * Peer (lib/peerjs.min.js; one of the room-code signaling servers).
+ * Also: Net.showConnTest() — the in-app "Connection test" overlay.
  * Exposes window.Net (see API at the bottom).
  */
 (function () {
@@ -470,8 +473,8 @@
     '#net-overlay .net-hint{font-size:16px;color:#ffe08a;font-weight:600}',
     '#net-overlay .net-small{font-size:12px;color:#8b93a7;font-family:ui-monospace,monospace;white-space:pre-line;word-break:break-word}',
     '#net-overlay .net-list{display:grid;grid-template-columns:1fr;gap:3px 14px;text-align:left;width:100%;max-width:760px}',
-    '#net-overlay .net-li{font-size:15px;line-height:1.25;color:#e8e8ff;display:flex;gap:6px;align-items:baseline}',
-    '#net-overlay .net-li b{font-weight:700;white-space:nowrap}#net-overlay .net-li span{color:#aab3c8;font-size:13px}',
+    '#net-overlay .net-li{font-size:15px;line-height:1.25;color:#e8e8ff}',
+    '#net-overlay .net-li b{font-weight:700}#net-overlay .net-li span{color:#aab3c8;font-size:13px;margin-left:6px}',
     '#net-overlay .net-box.net-wide .net-side{max-width:820px;width:100%}',
     '#net-overlay .net-verdict{font-size:18px;font-weight:800;line-height:1.25;color:#fff;background:rgba(255,255,255,.08);border-radius:12px;padding:6px 12px}',
     '#net-overlay .net-btns{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}',
@@ -1704,7 +1707,7 @@
       if (!pair) rep.forEach(function (s) {
         if (s.type === 'candidate-pair' && (s.selected || (s.nominated && s.state === 'succeeded'))) pair = pair || s;
       });
-      var out = { id: peer.id, via: peer.via, rtt: null, relay: false, local: '?', remote: '?', rx: peer.rx, tx: peer.tx, state: peer.pc.connectionState };
+      var out = { id: peer.id, via: peer.via, sig: peer.sigVia || null, rtt: null, relay: false, local: '?', remote: '?', rx: peer.rx, tx: peer.tx, state: peer.pc.connectionState };
       if (!pair) return out;
       if (pair.currentRoundTripTime != null) out.rtt = Math.round(pair.currentRoundTripTime * 1000);
       var lc = rep.get(pair.localCandidateId), rc = rep.get(pair.remoteCandidateId);

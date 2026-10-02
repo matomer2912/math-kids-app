@@ -671,7 +671,7 @@ function updateBadge() {
       const id = ids[i], p = G.role === 'host' ? Sim.S.players.get(id) : null;
       const name = G.role === 'host' ? (p ? p.name : 'P' + (id + 1)) : 'Host';
       if (!s) { lines.push(name + ': no stats'); return; }
-      lines.push(rttDot(s) + ' ' + name + ': ' + (s.rtt == null ? '?' : s.rtt + ' ms') + ' · ' + (s.relay ? 'RELAY (TURN)' : 'direct') + ' · via ' + s.via);
+      lines.push(rttDot(s) + ' ' + name + ': ' + (s.rtt == null ? '?' : s.rtt + ' ms') + ' · ' + (s.relay ? 'RELAY (TURN)' : 'direct') + ' · via ' + s.via + (s.sig ? ' (' + s.sig + ')' : ''));
       lines.push('   ' + s.local + ' ↔ ' + s.remote + ' · ' + s.state);
     });
     if (G.role === 'host') {
