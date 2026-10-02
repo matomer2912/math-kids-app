@@ -16,7 +16,7 @@
 
 const VFX = (() => {
   const MAXP = 256, POOL = 216;          // instance cap (pool + per-frame attached quads) / pooled particles
-  const MAXR = 12, COLS = 18, ROWS = 3;  // swing-trail ribbons
+  const MAXR = 12, COLS = 18, ROWS = 4;  // swing-trail ribbons
   const FLOOR_Y = 0.17;                  // ground effects (floor dressing tops out at 0.06, blob shadows 0.09, rings 0.11-0.15)
   const TAU = Math.PI * 2;
   const rnd = Math.random;
@@ -31,7 +31,7 @@ const VFX = (() => {
   const RCOL = [rgb(0xfff1d8), rgb(0x55b4ff), rgb(0xcf6cff), rgb(0xffc21a)];
   const RCORE = RCOL.map((c, i) => mixc(c, WHITE, i ? 0.55 : 0.2));
   const REDGE = [rgb(0xffe2b0), rgb(0x2f86ff), rgb(0xa848ff), rgb(0xff8a00)]; // outer rim of a trail: deeper tone, reads on bright floors
-  const RALPHA = [0.5, 0.62, 0.72, 0.82];
+  const RALPHA = [0.58, 0.66, 0.74, 0.84];
   const SPARK = [rgb(0xffe6a0), rgb(0x9fd6ff), rgb(0xe6a8ff), rgb(0xffd860)];
   const C = {
     ember: [rgb(0xffc04a), rgb(0xff8a1e), rgb(0xff5a14)], frost: rgb(0xc8f6ff), ice: rgb(0x8fe6ff), zap: rgb(0xd6f4ff), zapB: rgb(0x8fd8ff),
@@ -62,6 +62,7 @@ const VFX = (() => {
           return;
         }
         vec4 mv = viewMatrix * vec4(iPos, 1.0);
+        mv.xyz *= 1.0 - 0.7 / length(mv.xyz); // pulled towards the camera along its view ray (same spot on screen)
         if (abs(iPar.y - 1.0) < 0.5 || iPar.y > 5.5) { // streak / beam: stretched along the screen direction of iDir
           vec2 ax = (viewMatrix * vec4(iDir, 0.0)).xy; float L = length(ax);
           vec2 nx = L > 1e-4 ? ax / L : vec2(1.0, 0.0), ny = vec2(-nx.y, nx.x);
@@ -107,7 +108,13 @@ const VFX = (() => {
   const RIDX = (COLS - 1) * (ROWS - 1) * 6;
   const rMat = new THREE.ShaderMaterial(Object.assign({
     uniforms: { uAdd: { value: 0.72 } },
-    vertexShader: `attribute vec4 aCol; varying vec4 vCol; void main() { vCol = aCol; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `attribute vec4 aCol; varying vec4 vCol;
+      void main() {
+        vCol = aCol;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        mv.xyz *= 1.0 - 1.6 / length(mv.xyz); // drawn in front of the enemies it slices through (walls still hide it)
+        gl_Position = projectionMatrix * mv;
+      }`,
     fragmentShader: `uniform float uAdd; varying vec4 vCol; void main() { float a = vCol.a; if (a < 0.004) discard; gl_FragColor = vec4(vCol.rgb * a, a * (1.0 - uAdd)); }`,
     side: THREE.DoubleSide,
   }, BLEND));
@@ -189,9 +196,10 @@ const VFX = (() => {
   // ---------- swing trails ----------
   // tuning per weapon: R = radius as a fraction of the weapon range, w = band width, dur = sweep time, fade = tail life
   const TRAIL = {
-    sword:   { R: 0.93, w: 0.95, dur: 0.1, fade: 0.15, y: 1.0, arc: 1.0 },
-    hammer:  { R: 0.86, w: 1.55, dur: 0.15, fade: 0.17, y: 1.15, arc: 1.0 },
-    daggers: { R: 0.9, w: 0.55, dur: 0.06, fade: 0.1, y: 1.05, arc: 0.72 },
+    // cp = where the bright core line sits inside the band (fraction of w from the rim), fl = fill strength
+    sword:   { R: 0.93, w: 0.95, dur: 0.1, fade: 0.2, y: 1.0, arc: 1.0, cp: 0.14, fl: 0.3 },
+    hammer:  { R: 0.86, w: 1.55, dur: 0.15, fade: 0.25, y: 1.15, arc: 1.0, cp: 0.28, fl: 0.55 },
+    daggers: { R: 0.9, w: 0.55, dur: 0.06, fade: 0.12, y: 1.05, arc: 0.72, cp: 0.2, fl: 0.3 },
   };
   function slash(pid, ang, range, arc, rar) {
     const wp = weaponOf(pid); if (!wp) return;
@@ -202,7 +210,7 @@ const VFX = (() => {
     const half = arc * T.arc / 2, R = range * T.R;
     // the right hand is on the hero's ang + PI/2 side: forehand sweeps right -> left; swords alternate back-hand
     const dir = wp.w === 'sword' && n % 2 === 0 ? -1 : 1;
-    const base = { pid, x: pos.x, z: pos.z, R, col: RCOL[rar], core: RCORE[rar], al: RALPHA[rar], ang, rar, gl: rar };
+    const base = { pid, x: pos.x, z: pos.z, R, col: RCOL[rar], core: RCORE[rar], al: RALPHA[rar], ang, rar, gl: rar, cp: T.cp, fl: T.fl };
     if (wp.w === 'daggers') {
       ribbon(Object.assign({}, base, { y: 1.08, a0: ang + half, a1: ang - half * 0.7, w: T.w, t: 0, dur: T.dur, fade: T.fade, al: base.al * 0.85 }));
       ribbon(Object.assign({}, base, { y: 0.9, a0: ang - half, a1: ang + half * 0.7, w: T.w, t: -0.045, dur: T.dur, fade: T.fade, al: base.al * 0.85, R: R * 0.92 }));
@@ -234,7 +242,7 @@ const VFX = (() => {
     const busy = load(), mul = (low ? 0.4 : 1) * (busy > 0.85 ? 0.35 : busy > 0.6 ? 0.6 : 1) * (crit ? 1.5 : 1);
     const sc = SPARK[r];
     // impact flash (+ crit star)
-    spawn(hx, hy, hz, { life: crit ? 0.14 : 0.09, s0: crit ? 0.75 : 0.5, s1: crit ? 1.05 : 0.7, col: mixc(sc, WHITE, 0.6), a: crit ? 0.95 : 0.75 });
+    spawn(hx, hy, hz, { life: crit ? 0.14 : 0.09, s0: crit ? 0.75 : 0.45, s1: crit ? 1.05 : 0.65, col: mixc(sc, WHITE, 0.45), a: crit ? 0.95 : 0.6 });
     if (crit) {
       spawn(hx, hy + 0.05, hz, { sh: 5, life: 0.2, s0: 0.7, s1: 1.25, col: mixc(sc, WHITE, 0.4), a: 1, ro: rnd() * 0.6 });
       if (!low) spawn(x, FLOOR_Y, z, { sh: 2, life: 0.26, s0: 0.35, s1: 1.5, col: sc, a: 0.7, w: 0.22 });
@@ -252,7 +260,7 @@ const VFX = (() => {
       const base = Math.atan2(dx, dz);
       for (let i = 0; i < n; i++) {
         const a = base + (rnd() - 0.5) * 2 * sp, s = 5 + rnd() * 6;
-        spawn(hx, hy, hz, { vx: Math.sin(a) * s, vz: Math.cos(a) * s, vy: 1 + rnd() * 4, g: 16, dr: 2.5, st: 0.022, life: 0.16 + rnd() * 0.14, s0: 0.065, s1: 0.04, col: rnd() < 0.35 ? WHITE : sc, a: 1, sh: 1 });
+        spawn(hx, hy, hz, { vx: Math.sin(a) * s, vz: Math.cos(a) * s, vy: 1 + rnd() * 4, g: 16, dr: 2.5, st: 0.032, life: 0.16 + rnd() * 0.14, s0: 0.08, s1: 0.05, col: rnd() < 0.35 ? WHITE : sc, a: 1, sh: 1 });
       }
     }
     if (w === 'hammer' && !low) { // one shockwave ring per swing (a swing can hit several enemies)
@@ -298,7 +306,7 @@ const VFX = (() => {
     const pv = pid === G.myId ? me : (vis.get('p' + pid) || {});
     const f = pv.f || 0;
     if (kind === 'spin') {
-      ribbon({ pid, x: pos.x, z: pos.z, y: 1.0, R: 3.7, w: 1.4, a0: f + Math.PI, a1: f + Math.PI - TAU * 1.1, t: 0, dur: 0.3, fade: 0.2, col: RCOL[r], core: RCORE[r], al: Math.min(0.9, RALPHA[r] + 0.1), ang: f, rar: r, gl: r + 1 });
+      ribbon({ pid, x: pos.x, z: pos.z, y: 1.0, R: 3.7, w: 1.4, cp: 0.2, fl: 0.4, a0: f + Math.PI, a1: f + Math.PI - TAU * 1.1, t: 0, dur: 0.3, fade: 0.2, col: RCOL[r], core: RCORE[r], al: Math.min(0.9, RALPHA[r] + 0.1), ang: f, rar: r, gl: r + 1 });
     } else if (kind === 'slam') {
       spawn(pos.x, FLOOR_Y, pos.z, { sh: 2, life: 0.45, s0: 0.8, s1: 6.2, col: mixc(SPARK[r], WHITE, 0.3), a: 0.75, w: 0.1, ad: 0.6 });
       if (!low) for (let i = 0; i < 14; i++) {
@@ -388,13 +396,17 @@ const VFX = (() => {
     const wm = o.model.wmesh.matrixWorld;
     _h.fromArray(pts[0]).applyMatrix4(wm); _m.fromArray(pts[1]).applyMatrix4(wm); _t.fromArray(pts[2]).applyMatrix4(wm);
     const med = q === 'medium';
-    if (aura) { // soft glow + orbiting motes (legendary: gold, 3 motes + glints; epic: fainter purple, 2 motes)
+    const glowA = 1 - 0.4 * BR; // additive glows wash out on bright floors anyway: keep them soft there
+    if (aura) { // weapon glow + motes circling the hero (legendary: gold, 3 motes with tails + glints; epic: fainter purple, 2 motes)
       const leg = wp.r === 3, col = RCOL[wp.r];
-      quad(_m.x, _m.y, _m.z, 0, 0, 0, leg ? 0.78 : 0.56, 0, col, ((leg ? 0.34 : 0.2) + 0.05 * Math.sin(T * 2.6 + p.id)) * (1 - 0.45 * BR), 1 / ADDK, 0);
-      const n = leg ? (med ? 2 : 3) : (med ? 0 : 2), rr = leg ? 0.46 : 0.38;
+      quad(_m.x, _m.y, _m.z, 0, 0, 0, leg ? 0.9 : 0.66, 0, col, ((leg ? 0.42 : 0.27) + 0.06 * Math.sin(T * 2.6 + p.id)) * glowA, 1 / ADDK, 0);
+      const n = leg ? (med ? 2 : 3) : (med ? 1 : 2), rr = leg ? 0.8 : 0.72, spd = leg ? 2.3 : 1.8;
       for (let i = 0; i < n; i++) {
-        const a = T * (leg ? 2.8 : 2.2) + i * TAU / n + p.id;
-        quad(_m.x + Math.cos(a) * rr, _m.y + Math.sin(a * 2 + i) * 0.16, _m.z + Math.sin(a) * rr, 0, 0, 0, leg ? 0.075 : 0.06, 0, leg ? RCORE[3] : RCORE[2], leg ? 0.95 : 0.7, 1, 0);
+        const a = T * spd + i * TAU / n + p.id * 1.3, y = 1.15 + Math.sin(T * 1.7 + i * 2.1) * 0.25;
+        const x = o.x + Math.sin(a) * rr, z = o.z + Math.cos(a) * rr;
+        const tx = Math.cos(a) * rr * spd * 0.1, tz = -Math.sin(a) * rr * spd * 0.1; // short tail along the orbit (head at the mote)
+        quad(x - tx, y, z - tz, tx, 0, tz, leg ? 0.07 : 0.055, 1, col, leg ? 0.9 : 0.7, 0.85, 0);
+        quad(x, y, z, 0, 0, 0, leg ? 0.13 : 0.1, 0, RCORE[wp.r], leg ? 1 : 0.8, 0.85, 0);
       }
       if (wp.r === 3 && o.model.wmesh2) { _v.fromArray(pts[1]).applyMatrix4(o.model.wmesh2.matrixWorld); quad(_v.x, _v.y, _v.z, 0, 0, 0, 0.6, 0, col, 0.26 * (1 - 0.45 * BR), 1 / ADDK, 0); }
       if (leg && !med) {
@@ -405,28 +417,37 @@ const VFX = (() => {
         }
       }
     }
-    if (!em || load() > 0.7) return;
+    if (!em) return;
+    { // a soft glow on the blade in the enchant's colour (fire flickers, lightning crackles: smooth, never strobing)
+      const ec = em & E_FIRE ? C.ember[1] : em & E_ICE ? C.ice : em & E_ZAP ? C.zapB : em & E_LEECH ? C.leech : em & E_BOOM ? C.boom : null;
+      if (ec) {
+        const fl = em & E_FIRE ? 0.82 + 0.1 * Math.sin(T * 11 + p.id) + 0.08 * Math.sin(T * 17.3) : em & E_ZAP ? 0.8 + 0.2 * Math.sin(T * 23 + p.id) * Math.sin(T * 7.1) : 0.9 + 0.1 * Math.sin(T * 3);
+        _v.copy(_m).lerp(_t, 0.4);
+        quad(_v.x, _v.y, _v.z, 0, 0, 0, 0.55, 0, ec, 0.34 * fl * glowA, 1 / ADDK, 0);
+      }
+    }
+    if (load() > 0.7) return;
     const acc = heroAcc.get(p.id) || {}; heroAcc.set(p.id, acc);
     const k = med ? 0.5 : 1;
     const along = () => { _v.copy(_h).lerp(_t, 0.25 + rnd() * 0.75); return _v; };
-    if (em & E_FIRE) for (let i = emitN(acc, 'f', 8 * k, dt); i > 0; i--) {
+    if (em & E_FIRE) for (let i = emitN(acc, 'f', 12 * k, dt); i > 0; i--) {
       const v = along();
-      spawn(v.x + (rnd() - 0.5) * 0.12, v.y, v.z + (rnd() - 0.5) * 0.12, { vx: (rnd() - 0.5) * 0.4, vz: (rnd() - 0.5) * 0.4, vy: 0.9 + rnd() * 0.8, g: -0.8, dr: 1, life: 0.55 + rnd() * 0.35, s0: 0.1, s1: 0.025, col: C.ember[(rnd() * 3) | 0], a: 1, fi: 0.1 });
+      spawn(v.x + (rnd() - 0.5) * 0.12, v.y, v.z + (rnd() - 0.5) * 0.12, { vx: (rnd() - 0.5) * 0.4, vz: (rnd() - 0.5) * 0.4, vy: 1.0 + rnd() * 0.9, g: -0.8, dr: 1, life: 0.6 + rnd() * 0.4, s0: 0.13, s1: 0.03, col: C.ember[(rnd() * 3) | 0], a: 1, fi: 0.1 });
     }
-    if (em & E_ICE) for (let i = emitN(acc, 'i', 5 * k, dt); i > 0; i--) {
+    if (em & E_ICE) for (let i = emitN(acc, 'i', 7 * k, dt); i > 0; i--) {
       const v = along();
-      spawn(v.x + (rnd() - 0.5) * 0.3, v.y, v.z + (rnd() - 0.5) * 0.3, { vx: (rnd() - 0.5) * 0.3, vz: (rnd() - 0.5) * 0.3, vy: -0.35, life: 0.8 + rnd() * 0.4, s0: 0.11, s1: 0.03, col: C.frost, a: 0.9, sh: 5, ro: rnd(), rv: 1.5, fi: 0.25 });
+      spawn(v.x + (rnd() - 0.5) * 0.3, v.y, v.z + (rnd() - 0.5) * 0.3, { vx: (rnd() - 0.5) * 0.3, vz: (rnd() - 0.5) * 0.3, vy: -0.35, life: 0.8 + rnd() * 0.4, s0: 0.15, s1: 0.04, col: C.frost, a: 1, sh: 5, ro: rnd(), rv: 1.5, fi: 0.25 });
     }
-    if (em & E_ZAP) for (let i = emitN(acc, 'z', 3 * k, dt); i > 0; i--) { // a tiny crackling arc near the tip
-      const v = along(), a = rnd() * TAU, b = rnd() * TAU, L = 0.13;
-      const p1 = spawn(v.x + Math.cos(a) * L, v.y + Math.sin(b) * L, v.z + Math.sin(a) * L, { sh: 6, life: 0.12, s0: 0.04, s1: 0.03, col: C.zap, a: 1 });
+    if (em & E_ZAP) for (let i = emitN(acc, 'z', 4 * k, dt); i > 0; i--) { // a tiny crackling arc near the tip
+      const v = along(), a = rnd() * TAU, b = rnd() * TAU, L = 0.19;
+      const p1 = spawn(v.x + Math.cos(a) * L, v.y + Math.sin(b) * L, v.z + Math.sin(a) * L, { sh: 6, life: 0.13, s0: 0.055, s1: 0.04, col: C.zap, a: 1 });
       if (p1) { p1.dxs = Math.cos(a) * L; p1.dys = Math.sin(b) * L; p1.dzs = Math.sin(a) * L; }
-      const p2 = spawn(v.x + Math.cos(a) * L * 2 + Math.sin(b) * L, v.y + Math.sin(b) * L * 2 - L * 0.5, v.z + Math.sin(a) * L * 2 + Math.cos(b) * L, { sh: 6, life: 0.12, s0: 0.035, s1: 0.025, col: C.zapB, a: 1 });
+      const p2 = spawn(v.x + Math.cos(a) * L * 2 + Math.sin(b) * L, v.y + Math.sin(b) * L * 2 - L * 0.5, v.z + Math.sin(a) * L * 2 + Math.cos(b) * L, { sh: 6, life: 0.13, s0: 0.05, s1: 0.035, col: C.zapB, a: 1 });
       if (p2) { p2.dxs = Math.sin(b) * L * 0.8; p2.dys = -L * 0.5; p2.dzs = Math.cos(b) * L * 0.8; }
     }
-    if (em & E_LEECH) for (let i = emitN(acc, 'l', 3.5 * k, dt); i > 0; i--) {
+    if (em & E_LEECH) for (let i = emitN(acc, 'l', 5 * k, dt); i > 0; i--) {
       const v = along();
-      spawn(v.x, v.y, v.z, { vy: 0.55 + rnd() * 0.3, life: 0.9 + rnd() * 0.3, s0: 0.1, s1: 0.04, col: rnd() < 0.5 ? C.leech : C.leechD, a: 0.85, ad: 0.45, tw: rnd() * TAU, fi: 0.2, dr: 0.5 });
+      spawn(v.x, v.y, v.z, { vy: 0.55 + rnd() * 0.3, life: 0.9 + rnd() * 0.3, s0: 0.13, s1: 0.05, col: rnd() < 0.5 ? C.leech : C.leechD, a: 0.85, ad: 0.45, tw: rnd() * TAU, fi: 0.2, dr: 0.5 });
     }
     if (em & E_BOOM) for (let i = emitN(acc, 'b', 1.6 * k, dt); i > 0; i--) {
       spawn(_t.x, _t.y, _t.z, { vx: (rnd() - 0.5) * 0.6, vz: (rnd() - 0.5) * 0.6, vy: 0.7, life: 0.7, s0: 0.07, s1: 0.2, col: C.smoke, a: 0.45, ad: 0, fi: 0.2 });
@@ -536,8 +557,11 @@ const VFX = (() => {
     }
   }
 
+  const radii = [0, 0, 0, 0], alphas = [0, 0, 0, 0];
+  let shade = RCOL, shadeBR = -1;
   function writeRibbons(dt) {
     let nr = 0;
+    if (shadeBR !== BR) { shadeBR = BR; shade = RCOL.map(c => mixc(c, [0.1, 0.06, 0.03], 0.85 * BR)); }
     for (const rb of RB) {
       if (!rb.on) continue;
       rb.t += dt;
@@ -561,15 +585,17 @@ const VFX = (() => {
         const ang = rb.a0 + (rb.a1 - rb.a0) * u;
         const age = rb.t - rb.dur * easeInv(u);
         const k = clamp01(1 - age / rb.fade);
-        const taper = 0.22 + 0.78 * k;
-        const al = Math.min(0.95, rb.al * (1 + 0.22 * BR)) * k * Math.sqrt(k);
+        const taper = 0.3 + 0.7 * k;
+        const al = Math.min(0.95, rb.al * (1 + 0.22 * BR)) * Math.pow(k, 0.8);
         const sx = Math.sin(ang), sz = Math.cos(ang);
-        const rIn = rb.R - rb.w * taper, rCore = rb.R - rb.w * taper * 0.16;
-        const radii = [rIn, rCore, rb.R], alphas = [0, al, al * 0.6];
+        // rows inside -> out: transparent, soft fill (a darker under-stroke on bright floors), bright core, rim
+        const wt = rb.w * taper;
+        radii[0] = rb.R - wt; radii[1] = rb.R - wt * (rb.cp + 0.3); radii[2] = rb.R - wt * rb.cp; radii[3] = rb.R;
+        alphas[1] = al * Math.min(0.9, rb.fl + 0.3 * BR); alphas[2] = al; alphas[3] = al * 0.6;
         for (let w = 0; w < ROWS; w++) {
           const vi = vb + c * ROWS + w, p3 = vi * 3, p4 = vi * 4;
           rPos[p3] = rb.x + sx * radii[w]; rPos[p3 + 1] = rb.y; rPos[p3 + 2] = rb.z + sz * radii[w];
-          const col = w === 1 ? rb.core : w === 2 ? REDGE[rb.rar] : rb.col;
+          const col = w === 2 ? rb.core : w === 3 ? REDGE[rb.rar] : w === 1 ? shade[rb.rar] : rb.col;
           rCol[p4] = col[0]; rCol[p4 + 1] = col[1]; rCol[p4 + 2] = col[2]; rCol[p4 + 3] = alphas[w];
         }
       }
