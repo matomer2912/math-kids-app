@@ -702,7 +702,10 @@ function addItem(it) {
   lootToast(it, diff);
 }
 function salvageValue(it) { return Math.round((it.r + 1) * (it.r + 1) * 4 * it.p); }
-function upgradeCost(it) { return Math.round(15 * it.p * (it.r + 1)); }
+// each upgrade costs ~1.5x the previous one (rounded to 5), more for rarer gear; a weapon can't be
+// upgraded past the deepest floor reached + 2, so a lucky early drop can't be pumped up endlessly
+function upgradeCost(it) { return Math.max(5, Math.round(15 * (it.r + 1) * Math.pow(1.5, it.p - 1) / 5) * 5); }
+function upgradeCap() { return (Profile.best || 1) + 2; }
 function equipItem(it) {
   const i = Profile.inv.indexOf(it); if (i < 0) return;
   Profile.eq = i; saveProfile(); pushStats(); refreshHUDStatic(); sfx('item');

@@ -60,7 +60,7 @@ function refreshHUDStatic() {
 function cdRing(btn, cdEl, tEl, rem, total) {
   const k = Math.max(0, rem) / total;
   const step = Math.ceil(k * 50);
-  if (cdEl._s !== step) { cdEl._s = step; cdEl.style.background = step > 0 ? `conic-gradient(rgba(10,5,2,.72) ${step * 7.2}deg, transparent 0)` : 'none'; }
+  if (cdEl._s !== step) { cdEl._s = step; cdEl.style.background = step > 0 ? `conic-gradient(rgba(0,0,0,.45) ${step * 7.2}deg, transparent 0)` : 'none'; }
   if (tEl) setTxt(tEl, rem > 0.05 ? String(Math.ceil(rem)) : '');
   const cool = rem > 0.05;
   if (btn._cool && !cool && G.inGame) replayCls(btn, 'ready');
@@ -337,8 +337,9 @@ function renderCmp() {
   const acts = $('cmpActs'); acts.innerHTML = '';
   const mk = (cls, html, fn) => { const b = document.createElement('button'); b.className = 'big ' + cls; b.innerHTML = html; b.onclick = fn; acts.appendChild(b); return b; };
   if (isEq) {
-    const cost = upgradeCost(cur), can = Profile.coins >= cost;
-    mk('blue main' + (can ? '' : ' off'), `⬆️ UPGRADE 🪙${cost}<small>${can ? `⚡ ${pa} → ${pb}  (Lv ${cur.p} → ${cur.p + 1})` : `Need 🪙${cost - Profile.coins} more — salvage junk!`}</small>`, () => {
+    const cost = upgradeCost(cur), can = Profile.coins >= cost, capped = cur.p >= upgradeCap();
+    if (capped) mk('blue main off', `🔒 MAX LV ${cur.p}<small>Reach floor ${cur.p - 1} to upgrade further</small>`, () => toast('🔒 Go deeper first! Weapons can be upgraded up to 2 levels above your deepest floor.'));
+    else mk('blue main' + (can ? '' : ' off'), `⬆️ UPGRADE 🪙${cost}<small>${can ? `⚡ ${pa} → ${pb}  (Lv ${cur.p} → ${cur.p + 1})` : `Need 🪙${cost - Profile.coins} more — salvage junk!`}</small>`, () => {
       if (Profile.coins < cost) { toast('🪙 Not enough coins — smash pots & salvage gear!'); return; }
       Profile.coins -= cost; cur.p++; saveProfile(); pushStats(); refreshHUDStatic(); sfx('lvl');
       toast('⬆️ <b>' + esc(cur.n) + '</b> is now Lv ' + cur.p + '!', null, null, 1800);
