@@ -222,17 +222,17 @@ const Sim = (() => {
   // ---------- champion packs ----------
   // A rare, named, bigger version of a world mob with 1-2 affixes (CHAMP_AFFIXES in data.js) and 4-6
   // minions that guard it. Roughly every 2-3 floors: never on floor 1, boss floors or in the start room;
-  // the chance grows with every floor without one. HP ~8x a grunt (x the boss co-op factor), hits a bit
+  // the chance grows with every floor without one. HP ~10x a grunt (x the boss co-op factor), hits a bit
   // harder, can't be juggled, and always drops a rare-or-better weapon (25% legendary).
-  const CHAMP_HP = 250, CHAMP_DMG = 1.35, CHAMP_SPD_MAX = 6; // heroes run at 7.2: you can always get away
+  const CHAMP_HP = 300, CHAMP_DMG = 1.35, CHAMP_XP = 80, CHAMP_SPD_MAX = 6; // heroes run at 7.2: you can always get away
+  // chance by floors since the last pack (boss floors count): 1 -> 20%, 2 -> 70%, 3 -> 95%, more -> always
   function champRoll(f) {
     if (f < 2 || isBossFloor(f)) return false;
     if (S.champPlan && S.champPlan.f === f) return S.champPlan.has; // retrying a floor: same surprise
     if (S.champLastF === undefined || S.champLastF >= f) S.champLastF = f - 2; // new run / started mid-way
     const d = f - S.champLastF;
-    const has = R() < (d <= 1 ? 0.12 : d === 2 ? 0.45 : d === 3 ? 0.7 : 1);
+    const has = R() < (d <= 1 ? 0.2 : d === 2 ? 0.7 : d === 3 ? 0.95 : 1);
     S.champPlan = { f, has };
-    if (has) S.champLastF = f;
     return has;
   }
   // a roomy normal room well away from the start (exit / chasm rooms only as a fallback)
@@ -240,8 +240,8 @@ const Sim = (() => {
     const st = S.map.start;
     let best = -1, bs = 0;
     rooms.forEach((r, i) => {
-      if (i === 0 || !(r.kind === 'normal' || r.kind === 'exit' || r.kind === 'chasm') || r.w * r.h < 64) return;
-      if (Math.hypot((r.x + r.w / 2) * TILE - st.x, (r.y + r.h / 2) * TILE - st.z) < 22) return;
+      if (i === 0 || !(r.kind === 'normal' || r.kind === 'exit' || r.kind === 'chasm') || r.w * r.h < 56) return;
+      if (Math.hypot((r.x + r.w / 2) * TILE - st.x, (r.y + r.h / 2) * TILE - st.z) < 20) return;
       const sc = r.w * r.h * (r.kind === 'normal' ? 1 : 0.3) * (0.6 + R() * 0.8);
       if (sc > bs) { bs = sc; best = i; }
     });
@@ -273,7 +273,7 @@ const Sim = (() => {
   }
   function spawnPack(r, nMin) {
     const f = S.floor, map = S.map, ri = map.rooms.indexOf(r);
-    const type = R() < 0.3 ? 'brute' : f >= 4 && R() < 0.35 ? 'shield' : 'grunt';
+    const type = R() < 0.3 ? 'brute' : f >= 4 && R() < 0.3 ? 'charger' : 'grunt'; // (no shield-bearers: flanking a big one is no fun)
     const aff = champAffixRoll(f, type);
     const big = type === 'brute' ? 1.3 : 1.5, rad = ENEMIES[type].r * big;
     let c = { x: (r.x + r.w / 2) * TILE, z: (r.y + r.h / 2) * TILE };
@@ -282,7 +282,7 @@ const Sim = (() => {
     const e = spawnEnemy(type, c.x, c.z);
     e.cc = 1 | (aff << 2); e.pack = e.id; e.homeX = c.x; e.homeZ = c.z;
     e.size *= big; e.r = rad;
-    e.hp = e.maxHp = Math.round(CHAMP_HP * (type === 'brute' ? 1.3 : type === 'shield' ? 1.1 : 1) * scaleHp(f) * coopBossHp());
+    e.hp = e.maxHp = Math.round(CHAMP_HP * (type === 'brute' ? 1.5 : type === 'charger' ? 1.1 : 1) * scaleHp(f) * coopBossHp()); // brute ~ an elite brute, plus affixes
     e.spdM = champHas(e.cc, 'swift') ? 1.35 : 1; e.cdM = champHas(e.cc, 'swift') ? 0.8 : 1;
     e.reach = big * 0.85; e.shockT = 3; e.patT = 1 + R() * 2;
     unstickPos(e);
@@ -290,6 +290,7 @@ const Sim = (() => {
     const pool = ['grunt', 'grunt', 'runner', 'slime', 'archer'].concat(f >= 5 ? ['shield', 'charger'] : []);
     e.minType = R.pick(pool);
     for (let k = 0; k < nMin; k++) addMinion(e, (k / nMin) * 6.283 + R() * 0.4, false);
+    S.champLastF = f;
     return e;
   }
   function addMinion(L, slot, awake) {
@@ -678,7 +679,7 @@ const Sim = (() => {
       }
     }
     // shared XP for everyone
-    const xp = Math.round(e.d.xp * (1 + 0.25 * (f - 1)) * (e.cc & 1 ? 12 : e.elite ? 4 : 1) * (e.small ? 0.5 : 1));
+    const xp = e.cc & 1 ? Math.round(CHAMP_XP * (1 + 0.25 * (f - 1))) : Math.round(e.d.xp * (1 + 0.25 * (f - 1)) * (e.elite ? 4 : 1) * (e.small ? 0.5 : 1));
     if (Sim.onGrant) for (const p of S.players.values()) Sim.onGrant(p.id, { xp });
     if (e.type === 'egg') return;
     if (e.cc & 1) { champDeath(e); return; }
@@ -933,9 +934,9 @@ const Sim = (() => {
       if (e.st === 'dash') {
         e.t -= dt;
         const hit = moveCircle(S.map, e, Math.sin(e.cang) * 19 * dt, Math.cos(e.cang) * 19 * dt, e.r * 0.9);
-        for (const p of S.players.values()) if (!e.hitP.has(p.id) && Math.hypot(p.x - e.x, p.z - e.z) < e.r + 0.7) { e.hitP.add(p.id); hurtPlayer(p, d.dmg * (e.elite ? 1.5 : 1)); }
+        for (const p of S.players.values()) if (!e.hitP.has(p.id) && Math.hypot(p.x - e.x, p.z - e.z) < e.r + 0.7) { e.hitP.add(p.id); enemyHits(e, p, d.dmg * (e.elite ? 1.5 : 1) * (e.cc & 1 ? CHAMP_DMG : 1)); }
         if (hit || e.t <= 0) {
-          e.st = 'chase'; e.cd = d.cd * (0.8 + R() * 0.4);
+          e.st = 'chase'; e.cd = d.cd * (0.8 + R() * 0.4) * cdM;
           if (hit) { e.stun = 1.3; ev('ring', r1(e.x), r1(e.z), 1.4, 0xffffff); ev('sfx', 'hit'); }
         }
         return;
