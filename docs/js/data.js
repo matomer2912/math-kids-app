@@ -128,7 +128,7 @@ const NEW_MOBS = { slime: 'slime', charger: 'charger', shield: 'guard', bomber: 
 //    mist [density, y fully misty, y mist-free, colour] ground mist pooled in pits and drifting over floors
 //    dapple 0..1 leaf-shadow / moonbeam pattern on the sun light, dappleScale its world scale (0.055) · rim [colour, strength, lift] character rim light
 //    gl glow-decal gain · amb/ambC ambient particle kind / colour · vig CSS vignette · hero hero light colour
-//    heroPool hero light-pool strength
+//    heroPool hero light-pool strength · abyss 0..1 deep chasms fade to black (default 1; 0 for open sky)
 //  look (surface treatment, read by look.js lookOf/buildLevel; every field optional, see LOOK_DEF):
 //    floor/corr tile names for rooms / corridors · patch + patchP big blob patches · wall, wallAlt + altP
 //    wall sides · top wall tops · cliff pit cliffs · rubble chance of broken wall tops · rubbleT/rubbleC
@@ -202,30 +202,42 @@ const THEMES = [
     boss: { name: 'The Frost Giant', kind: 'giant', body: 0x8fc4e8, accent: 0xffffff, skin: 0x8fc4e8, eye: 0x00e5ff, sig: ['icicles', 'icicles', 'avalanche'] },
   },
   {
-    name: 'Sky Castle', floor: 0xe6e2ee, floor2: 0xd3cde0, wall: 0xa9a2bd, top: 0xf6f3ff, voidc: 0x5d9be0, hemi: 0xffffff, ground: 0x8fb4e0,
+    name: 'Sky Castle', floor: 0xe4dccb, floor2: 0xb9bdcc, wall: 0xd2c9b8, top: 0xe8e2d4, voidc: 0x6fa6e6, hemi: 0xffffff, ground: 0x8fb4e0,
     mobs: Object.assign({ grunt: 'knight', runner: 'bat', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0xd8d4e4, cube: 0x8fd0ff, bone: 0xf0f0f0, accent: 0x2a5ad0, deco: 'sky',
     pit: { c: 0x6aaaf0, c2: 0xffffff, glow: 0, sky: true }, slow: { c: 0xffffff, name: 'Cloud Fluff' }, pattern: 'marble', walls: 'banner', traps: ['vent', 'plate'],
     light: 0xfff07a, carpet: 0x2a4ac0, carpet2: 0xffc72c, slime: 0xc8e8ff, guard: [0xc0c8d8, 0xffc72c], mage: [0x2a4ac0, 0xffe14a], totem: 0xe6e2ee, charger: 0x8a7ad0,
-    gfx: { exp: 0.7, gl: 0.35, hemi: 0.8, sun: [0xfff4dc, 1.05], fog: [32, 64], amb: 'cloud', vig: 'rgba(20,40,90,.32)' },
+    // bright crisp day: warm sun from the left, cool blue sky fill and aerial haze, drifting cloud shadows, marble & gold
+    gfx: { exp: 0.74, gl: 0.6, hemi: 0.44, sky: 0xb4d0ff, gnd: 0x7a7266, sun: [0xfff0d4, 1.65], sunDir: [-14, 16, 8], dapple: 0.4, dappleScale: 0.014,
+      fog: [20, 54], fogc: 0x8ab8ea, bg: 0x78aeea, mist: [0.16, -3.2, 0.45, 0xdceaff], amb: 'cloud', vig: 'rgba(30,60,120,.26)', rim: [0xfff0d8, 0.35, 0.04], hero: 0xfff4e0, heroPool: 0.1, abyss: 0 },
+    look: { floor: ['marble', 'marble', 'slab', 'marble', 'marble', 'slab'], corr: ['tiles', 'slab', 'tiles'], wall: 'sandstone', wallAlt: 'templeWall', altP: 0.3, top: 'slabTop', rubbleT: 'rubble',
+      rubbleC: 0xe8e2d4, cliff: 'rock', topVar: 0.3, rubble: 0.08, lip: 0x4a8a40, lipP: 0.18, lipT: 'leaf', ao: 0.7, aoR: 0.45, side: 0.82, base: 0.62, bright: 1.0 },
     boss: { name: 'The Storm Dragon', kind: 'dragon', body: 0x3a5cc8, accent: 0xffe14a, skin: 0x3a5cc8, eye: 0xffffff, sig: ['lightning', 'lightning', 'breath'] },
   },
   {
-    name: 'Mushroom Caves', floor: 0x544766, floor2: 0x4a3e5b, wall: 0x332a45, top: 0x63527c, voidc: 0x0a0612, hemi: 0xe6d0ff, ground: 0x1d1233,
+    name: 'Mushroom Caves', floor: 0x58506a, floor2: 0x484258, wall: 0x3e364e, top: 0x4e4664, voidc: 0x07040c, hemi: 0xe6d0ff, ground: 0x1d1233,
     mobs: Object.assign({ grunt: 'shroom', runner: 'spider', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0x6a5a80, cube: 0xd05aff, bone: 0xe8e0f0, accent: 0x3affc0, deco: 'mushroom',
-    pit: { c: 0x2adf5a, c2: 0x9aff3a, glow: 1 }, slow: { c: 0x8a3ac0, name: 'Goo' }, pattern: 'moss', walls: 'glow', traps: ['vent', 'spike'],
-    light: 0x5affd0, carpet: 0x6a2a8a, carpet2: 0x3affc0, slime: 0xd05aff, guard: [0x6a4a8a, 0x3affc0], mage: [0x5a1a8a, 0x3affc0], totem: 0xd02a3a, charger: 0x4a3a6a,
-    gfx: { exp: 1.15, gl: 1, hemi: 0.7, sun: [0xd8b0ff, 0.75], fog: [24, 48], amb: 'spore', vig: 'rgba(20,0,36,.6)', hero: 0xf0d8ff },
+    pit: { c: 0x0c7a64, c2: 0x1fae8c, glow: 1 }, slow: { c: 0x8a3ac0, name: 'Goo' }, pattern: 'moss', walls: 'glow', traps: ['vent', 'spike'],
+    light: 0x5affd0, carpet: 0x4a1a6a, carpet2: 0x2adfb0, slime: 0xd05aff, guard: [0x6a4a8a, 0x3affc0], mage: [0x5a1a8a, 0x3affc0], totem: 0xd02a3a, charger: 0x4a3a6a,
+    // dark bioluminescence: faint violet light from cracks above, teal / violet / magenta glowing fungi, violet ground mist
+    gfx: { exp: 1.1, gl: 1.5, hemi: 0.4, sky: 0x8a7ad0, gnd: 0x140c22, sun: [0xa898ff, 0.55], sunDir: [-10, 20, -6], dapple: 0.55, dappleScale: 0.03, fog: [20, 44], fogc: 0x140a24, bg: 0x07040d,
+      mist: [0.45, -2.0, 0.9, 0x4a3a8a], amb: 'spore', vig: 'rgba(14,0,30,.62)', rim: [0xb89aff, 0.65, 0.12], hero: 0xe8d4ff, heroPool: 0.34 },
+    look: { floor: ['rock', 'slab', 'rock', 'slabCrack', 'cobble'], corr: ['dirt', 'rock', 'roots'], patch: 'mossFloor', patchP: 0.3, wall: 'rock', wallAlt: 'brickMoss', altP: 0.25,
+      top: 'rubble', rubbleT: 'rock', rubbleC: 0x4a4060, cliff: 'rock', topVar: 0.3, rubble: 0.25, lip: 0x2a8a7a, lipP: 0.45, lipT: 'mossFloor', ao: 0.78, aoR: 0.45, bright: 1.15 },
     boss: { name: 'The Mushroom King', kind: 'mushroom', body: 0xd8243a, accent: 0xffffff, skin: 0xf0e0c0, eye: 0x222222, sig: ['spores', 'spores', 'bounce'] },
   },
   {
-    name: 'Pirate Cove', floor: 0xa47444, floor2: 0x93663a, wall: 0x5c534a, top: 0x7d7468, voidc: 0x06202a, hemi: 0xfff0d8, ground: 0x1a3a4a,
+    name: 'Pirate Cove', floor: 0x9c724a, floor2: 0x86623f, wall: 0x6e5c48, top: 0x7a6a56, voidc: 0x0a1a20, hemi: 0xfff0d8, ground: 0x1a3a4a,
     mobs: Object.assign({ grunt: 'pirate', runner: 'crab', archer: 'skelArcher', boomer: 'cube', brute: 'golem', caster: 'necro' }, NEW_MOBS),
     golem: 0xc07a6a, cube: 0x3a3a3a, bone: 0xe8e6da, accent: 0xc0302a, deco: 'pirate',
-    pit: { c: 0x135a7a, c2: 0x3aa0c0, glow: 0 }, slow: { c: 0x4a6a3a, name: 'Seaweed' }, pattern: 'planks', walls: 'cave', traps: ['plate', 'spike'],
-    light: 0xffb040, carpet: 0xa0201a, carpet2: 0xffc72c, slime: 0x3ac0b0, guard: [0x2a2a3a, 0xc0302a], mage: [0x1a4a6a, 0x3dffd0], totem: 0x8a5a2a, charger: 0x3a6a8a,
-    gfx: { exp: 1, gl: 0.85, hemi: 0.72, sun: [0xffe0b0, 1.0], fog: [25, 52], amb: 'mist', vig: 'rgba(0,20,32,.5)' },
+    pit: { c: 0x0f4352, c2: 0x2f7686, glow: 0 }, slow: { c: 0x4a6a3a, name: 'Seaweed' }, pattern: 'planks', walls: 'cave', traps: ['plate', 'spike'],
+    light: 0xffb040, carpet: 0x6e1614, carpet2: 0xb08a38, slime: 0x3ac0b0, guard: [0x2a2a3a, 0xc0302a], mage: [0x1a4a6a, 0x3dffd0], totem: 0x8a5a2a, charger: 0x3a6a8a,
+    // stormy dusk: cool teal-grey storm light, sea haze and spray, warm lanterns on weathered planks and docks
+    gfx: { exp: 1.05, gl: 1.45, hemi: 0.48, sky: 0x8aa8b4, gnd: 0x1a2428, sun: [0xb0ccd4, 0.9], sunDir: [-12, 19, -6], dapple: 0.45, dappleScale: 0.018, fog: [21, 48], fogc: 0x1c3038, bg: 0x0c1a20,
+      mist: [0.35, -2.6, 0.6, 0x6a8a96], amb: 'mist', ambC: 0xcfe6ee, vig: 'rgba(0,12,20,.58)', rim: [0xa8d4ff, 0.55, 0.1], hero: 0xffdcb0, heroPool: 0.3 },
+    look: { floor: ['planks'], corr: ['planks', 'planks', 'woodTop'], wall: 'planks', wallAlt: 'rock', altP: 0.3, top: 'woodTop', rubbleT: 'planks', rubbleC: 0x6a5440,
+      cliff: 'planks', topVar: 0.3, rubble: 0.14, lip: 0x3a5a40, lipP: 0.35, lipT: 'mossFloor', ao: 0.75, aoR: 0.45, bright: 1.08, norot: true, puddle: 0x1e2a2a },
     boss: { name: 'Captain Bonebeard', kind: 'captain', body: 0x2a2a3a, accent: 0xc0302a, skin: 0xe8e6da, eye: 0x3dffd0, sig: ['cannons', 'cannons', 'anchor'] },
   },
 ];
