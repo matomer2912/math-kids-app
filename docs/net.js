@@ -49,7 +49,6 @@
   var CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ'; // no I / L / O and no digits: easy to read and type
   var ROOM_JOIN_MS = 25000;      // guest: one whole join attempt
   var ROOM_HOST_SESS_MS = 25000; // host: one guest's connection attempt
-  var ROOM_RETRY_MS = 6000;      // host: retry the signaling server while offline
 
   var Net = {
     isHost: false,
@@ -1503,6 +1502,182 @@
   }
 
   // ------------------------------------------------------------------
+  // Connection test (lobby / join screen button): what works on this phone's network, in ~6 s.
+  //   internet, each matchmaking server, STUN (public address), each TURN relay, LAN address, camera.
+  // ------------------------------------------------------------------
+  var TEST_MS = 6000;
+  function maskIp(ip) { var p = String(ip).split('.'); return p.length === 4 ? p[0] + '.' + p[1] + '.x.x' : String(ip).replace(/:[^:]*:[^:]*$/, ':…'); }
+  function gatherTest(servers, relayOnly, ms, onCand) {
+    return new Promise(function (resolve) {
+      var pc, done = false, t;
+      var finish = function () { if (done) return; done = true; clearTimeout(t); try { pc.close(); } catch (e) {} resolve(); };
+      try {
+        pc = new RTCPeerConnection({ iceServers: servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
+        pc.createDataChannel('t');
+        pc.onicecandidate = function (e) {
+          if (!e.candidate) { finish(); return; }
+          var m = /candidate:\S+ \d+ (\w+) \d+ (\S+) \d+ typ (\w+)/.exec(e.candidate.candidate || '');
+          if (m && onCand(m[3], m[2], m[1].toLowerCase())) finish();
+        };
+        pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(finish);
+      } catch (e) { finish(); return; }
+      t = setTimeout(finish, ms);
+    });
+  }
+  function connTest(onUpdate) {
+    var t0 = Date.now(), items = [], online = isOnline();
+    var item = function (label) { var it = { label: label, ok: null, detail: '' }; items.push(it); return it; };
+    var upd = function () { safeCall(onUpdate, items); };
+    var set = function (it, ok, detail) { if (it.ok !== null) return; it.ok = ok; it.detail = detail || ''; upd(); };
+    var secs = function () { return ((Date.now() - t0) / 1000).toFixed(1) + ' s'; };
+    var iNet = item('Internet'), iSig = [], tasks = [];
+    sigConfigs().forEach(function (cfg) { iSig.push({ cfg: cfg, it: item(cfg.name.replace(/^Tracker /, 'Tracker ').replace(/^PeerJS$/, 'PeerJS server')) }); });
+    var iStun = item('STUN (public address)');
+    var iTurn = ICE_TURN.map(function (e) { return { e: e, it: item(e.name) }; });
+    var iLan = item('Wi-Fi / LAN address');
+    var iCam = item('Camera (QR mode)');
+    upd();
+    // internet: a no-cors fetch comes back 'opaque' only from the real network (never from the offline cache)
+    if (!online) set(iNet, false, 'phone is offline (no Wi-Fi / mobile data)');
+    else {
+      var probe = function (u) {
+        return fetch(u + (u.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now(), { mode: 'no-cors', cache: 'no-store' })
+          .then(function (r) { if (r.type !== 'opaque') throw new Error('cache'); return true; });
+      };
+      var left = 2;
+      tasks.push(new Promise(function (res) {
+        var fin = function (ok) { if (ok) { set(iNet, true, 'reachable (' + secs() + ')'); res(); } else if (--left === 0) res(); };
+        ['https://www.gstatic.com/generate_204', 'https://www.cloudflare.com/cdn-cgi/trace'].forEach(function (u) {
+          probe(u).then(function () { fin(true); }, function () { fin(false); });
+        });
+        setTimeout(res, TEST_MS - 500);
+      }));
+    }
+    // matchmaking servers: open each transport with a throwaway room name
+    iSig.forEach(function (x) {
+      tasks.push(new Promise(function (res) {
+        var tr = null, done = false;
+        var fin = function (ok, d) { if (done) return; done = true; set(x.it, ok, d); later(function () { if (tr) tr.destroy(); }); res(); };
+        try {
+          tr = (debug.makeTransport || TR_FACTORY[x.cfg.kind])(x.cfg, 'TEST' + rnd(6, CODE_ABC), 't' + rnd(7), {
+            onOpen: function () { fin(true, 'reachable (' + secs() + ')'); },
+            onMsg: function () {}, onPresence: function () {},
+            onClose: function (why) { fin(false, why === 'ws-error' || why === 'ws-closed' ? 'can\'t connect' : String(why)); }
+          });
+        } catch (e) { fin(false, 'error'); }
+        setTimeout(function () { fin(false, 'no answer'); }, TEST_MS - 700);
+      }));
+    });
+    // STUN + local address
+    var lan = [], hidden = false, v6 = false;
+    tasks.push(gatherTest(online ? [ICE_STUN] : [], false, 4500, function (type, addr) {
+      if (type === 'srflx') { set(iStun, true, 'public ' + maskIp(addr) + ' (' + secs() + ')'); }
+      else if (type === 'host') {
+        if (/\.local$/i.test(addr)) hidden = true;
+        else if (addr.indexOf(':') >= 0) v6 = true;
+        else if (lan.indexOf(addr) < 0) lan.push(addr);
+      }
+      return false;
+    }).then(function () {
+      set(iStun, false, online ? 'no answer (UDP blocked?)' : 'offline');
+      if (lan.length) set(iLan, true, lan.slice(0, 2).join(', '));
+      else if (hidden) set(iLan, true, 'found (hidden by Chrome until the camera is allowed)');
+      else if (v6) set(iLan, 'warn', 'IPv6 only');
+      else set(iLan, false, 'none — Wi-Fi off?');
+    }));
+    // TURN relays, one by one in parallel (relay-only gathering)
+    iTurn.forEach(function (x) {
+      tasks.push(gatherTest(online ? [iceEntry(x.e)] : [], true, 5000, function (type, addr, proto) {
+        if (type === 'relay') { set(x.it, true, 'relay ' + maskIp(addr) + ' (' + secs() + ')'); return true; }
+        return false;
+      }).then(function () { set(x.it, false, online ? 'no relay (busy or blocked)' : 'offline'); }));
+    });
+    // camera permission (no prompt)
+    tasks.push(new Promise(function (res) {
+      var bd = 'BarcodeDetector' in window ? 'fast scanner' : 'scanner: jsQR';
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { set(iCam, false, window.isSecureContext ? 'no camera' : 'needs https'); res(); return; }
+      var q = navigator.permissions && navigator.permissions.query ? navigator.permissions.query({ name: 'camera' }) : Promise.reject();
+      q.then(function (st) {
+        if (st.state === 'granted') set(iCam, true, 'allowed · ' + bd);
+        else if (st.state === 'denied') set(iCam, false, 'blocked — allow it in Chrome site settings');
+        else set(iCam, 'info', 'will ask when scanning · ' + bd);
+      }, function () { set(iCam, 'info', 'will ask when scanning'); }).then(res, res);
+    }));
+    return Promise.race([Promise.all(tasks), new Promise(function (r) { setTimeout(r, TEST_MS); })]).then(function () {
+      items.forEach(function (it) { if (it.ok === null) { it.ok = false; it.detail = 'timed out'; } });
+      var sigOk = iSig.filter(function (x) { return x.it.ok === true; }).length;
+      var turnOk = iTurn.some(function (x) { return x.it.ok === true; });
+      var stunOk = iStun.ok === true;
+      if (iNet.ok !== true && (sigOk || stunOk)) { iNet.ok = true; iNet.detail = 'reachable (web check blocked)'; }
+      var verdict;
+      if (!online || (iNet.ok !== true && !sigOk && !stunOk && !turnOk)) verdict = '📵 No internet here. Only the QR mode will work — put everyone on the same Wi-Fi or Dad\'s hotspot.';
+      else if (!sigOk) verdict = '⚠️ Internet works, but the matchmaking servers are blocked on this network. Try mobile data, or use the QR mode on the same Wi-Fi.';
+      else if (!stunOk && !turnOk) verdict = '⚠️ Room codes can find the game, but this network blocks game traffic. Put everyone on the same Wi-Fi or Dad\'s hotspot.';
+      else if (!turnOk) verdict = '✅ Room codes should work. If a phone on mobile data can\'t join, put everyone on the same Wi-Fi.';
+      else verdict = '✅ Room codes should work — even with phones on different networks.';
+      if (iCam.ok === false) verdict += ' (QR mode needs the camera.)';
+      var conn = navigator.connection || {};
+      var lines = [
+        'Desert Dungeons connection test · ' + new Date().toISOString().replace('T', ' ').slice(0, 19),
+        'browser: ' + navigator.userAgent,
+        'online: ' + online + (conn.type ? ' · type ' + conn.type : '') + (conn.effectiveType ? ' · ' + conn.effectiveType : '') + (conn.rtt != null ? ' · rtt ' + conn.rtt + ' ms' : ''),
+        'page: ' + location.href.split('#')[0]
+      ];
+      items.forEach(function (it) { lines.push((ICON[it.ok] || '?') + ' ' + it.label + ': ' + it.detail); });
+      lines.push('=> ' + verdict);
+      if (room) lines.push('room ' + room.code + ' ' + room.status + ' · ' + room.bus.info().servers.map(function (s) { return s.name + ' ' + s.state + (s.why && s.state !== 'open' ? ' (' + s.why + ')' : ''); }).join(', '));
+      lines.push('log: ' + debug.log.slice(-12).join(' | '));
+      return { items: items, verdict: verdict, text: lines.join('\n'), ms: Date.now() - t0 };
+    });
+  }
+  function copyText(text) {
+    var fallback = function () {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (e) { return false; }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return true; }, fallback);
+    return Promise.resolve(fallback());
+  }
+  var testRun = 0;
+  function showConnTest() {
+    if (pairing) return; // never on top of a pairing in progress
+    var my = ++testRun, result = null;
+    var close = { label: 'Close', cls: 'net-cancel', fn: function () { testRun++; hideOverlay(); } };
+    var view = function (items) {
+      var v = { title: '📶 Connection test', list: items, buttons: [close] };
+      if (result) {
+        v.verdict = result.verdict;
+        v.buttons = [
+          { label: '📋 Copy details', fn: function () {
+            copyText(result.text).then(function (ok) {
+              if (my !== testRun) return;
+              var m = ov.querySelector('.net-hint') || ov.querySelector('.net-side').appendChild(el('div', 'net-hint'));
+              m.textContent = ok ? '✅ Copied — paste it in a message.' : 'Couldn\'t copy — take a screenshot instead.';
+            });
+          } },
+          { label: '↻ Again', fn: showConnTest },
+          close
+        ];
+      } else v.msg = 'Testing… (about 6 seconds)';
+      render(v);
+    };
+    setState('conn-test');
+    connTest(function (items) { if (my === testRun && !result) view(items); }).then(function (r) {
+      if (my !== testRun) return;
+      result = r; debug.lastTest = r;
+      dlog('conn test', r.ms + 'ms', r.verdict);
+      view(r.items);
+      setState('conn-test-done');
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Keepalive + dead-connection watchdog
   // ------------------------------------------------------------------
   setInterval(function () {
@@ -1614,6 +1789,9 @@
   Net.roomStatus = function () { return room ? room.status : null; };
   Net.roomInfo = roomInfo;
   Net.isOnline = isOnline;
+  Net.connTest = connTest;          // Promise<{items:[{label, ok, detail}], verdict, text}>, onUpdate(items) while running
+  Net.showConnTest = showConnTest;  // the same as an overlay with "Copy details"
+  Net.copyText = copyText;
   Net.joinRoom = joinRoom;
   Net.codeFromText = codeFromText;
   Net.deviceId = deviceId;
