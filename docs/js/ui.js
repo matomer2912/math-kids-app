@@ -397,11 +397,12 @@ function refreshMenu() {
   if (cps.length > 1) {
     chips.insertAdjacentHTML('beforeend', '<span class="lbl">START AT</span>');
     cps.slice(-5).forEach(f => {
-      const b = document.createElement('button'); b.className = 'chip' + (f === G.startFloor ? ' on' : ''); b.textContent = 'Floor ' + f;
+      const b = document.createElement('button'); b.className = 'chip' + (f === G.startFloor ? ' on' : ''); b.innerHTML = '<span class="fw">Floor </span><span class="fs">F</span>' + f;
       b.onclick = () => { G.startFloor = f; refreshMenu(); };
       chips.appendChild(b);
     });
   }
+  if (typeof heroCardRefresh === 'function') heroCardRefresh(); // 3D portrait + HEROES button (heroes.js)
 }
 $('nameIn').addEventListener('input', e => { Profile.name = e.target.value.trim().slice(0, 12); saveProfile(); });
 $('soloBtn').onclick = () => { audioInit(); startGame('solo'); };

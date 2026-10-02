@@ -3,15 +3,21 @@
 
 const $ = id => document.getElementById(id);
 
-// ---------- profile (each device owns its own hero) ----------
-const Profile = (() => {
-  let p = null;
-  try { p = JSON.parse(localStorage.getItem('dd_profile') || 'null'); } catch (e) { p = null; }
-  if (!p || !p.inv || !p.inv.length) {
-    const s = makeItem(1, 0, 'sword'); s.n = 'Trusty Sword';
-    const b = makeItem(1, 0, 'bow'); b.n = 'Hunting Bow';
-    p = { name: '', color: PLAYER_COLORS[Math.floor(Math.random() * 3)], lvl: 1, xp: 0, coins: 0, inv: [s, b], eq: 0, best: 1 };
-  }
+// ---------- heroes + profile ----------
+// Each device keeps up to HERO_SLOTS heroes, every one a completely separate save (coins, gear, level,
+// boosts, outfits, deepest floor...). `Profile` is always THE active hero: the rest of the game reads
+// and writes it directly, and switching heroes swaps its contents in place (heroes.js).
+// Storage: localStorage 'dd_heroes' = { v: 1, active: i, slots: [hero | null, ...] }. 'dd_profile' still
+// gets the active hero on every save (older versions read it; it is also the fallback if 'dd_heroes' is
+// ever unreadable). The first start of this version moves an existing 'dd_profile' into slot 0.
+const HERO_SLOTS = 3;
+function newHeroData(name, color) { // what a brand-new hero starts with
+  const s = makeItem(1, 0, 'sword'); s.n = 'Trusty Sword';
+  const b = makeItem(1, 0, 'bow'); b.n = 'Hunting Bow';
+  return { name: name || '', color: color || PLAYER_COLORS[Math.floor(Math.random() * 3)], lvl: 1, xp: 0, coins: 0, inv: [s, b], eq: 0, best: 1 };
+}
+function fixHero(p) { // validates a stored hero and fills in what older saves don't have; null = unusable
+  if (!p || typeof p !== 'object' || !Array.isArray(p.inv) || !p.inv.length) return null;
   // merchant extras (older saves don't have them)
   if (!p.boosts || typeof p.boosts !== 'object') p.boosts = {};
   if (!p.pots || typeof p.pots !== 'object') p.pots = {};
@@ -20,9 +26,58 @@ const Profile = (() => {
   if (!Array.isArray(p.skins)) p.skins = [];
   if (typeof p.skin !== 'string' || (p.skin && !p.skins.includes(p.skin))) p.skin = '';
   return p;
+}
+const Heroes = (() => {
+  const load = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const d = load('dd_heroes');
+  let active = d ? d.active | 0 : 0, migrated = false, dirty = !d;
+  // both keys are always written together, so the active hero and 'dd_profile' match exactly; if they
+  // don't, an older version of the game (which only knows 'dd_profile') played since: keep that progress
+  let newer = null;
+  try { const raw = localStorage.getItem('dd_profile'), a = d && Array.isArray(d.slots) && d.slots[active]; if (raw && a && JSON.stringify(a) !== raw) newer = fixHero(JSON.parse(raw)); } catch (e) { }
+  const slots = [];
+  for (let i = 0; i < HERO_SLOTS; i++) slots.push(d && Array.isArray(d.slots) ? fixHero(d.slots[i]) : null);
+  if (newer) { slots[active] = newer; dirty = true; }
+  if (!slots[active]) { active = slots.findIndex(Boolean); dirty = true; }
+  if (active < 0) { // first start of this version (or unreadable heroes): the old single save becomes hero 1
+    const old = fixHero(load('dd_profile'));
+    active = 0; slots[0] = old || fixHero(newHeroData());
+    migrated = !!old;
+  }
+  return { slots, active, migrated, dirty };
 })();
+const Profile = Heroes.slots[Heroes.active];
 let saveT = 0;
-function saveProfile() { try { localStorage.setItem('dd_profile', JSON.stringify(Profile)); } catch (e) { } }
+function saveProfile() {
+  Heroes.slots[Heroes.active] = Profile;
+  try { localStorage.setItem('dd_heroes', JSON.stringify({ v: 1, active: Heroes.active, slots: Heroes.slots })); } catch (e) { }
+  try { localStorage.setItem('dd_profile', JSON.stringify(Profile)); } catch (e) { }
+}
+if (Heroes.dirty) saveProfile(); // write the migrated / first hero right away
+function heroCount() { return Heroes.slots.filter(Boolean).length; }
+// make slot i the active hero: the live Profile object keeps its identity, only its contents change
+function heroActivate(i) {
+  const next = Heroes.slots[i];
+  if (i === Heroes.active || !next || next === Profile) return false;
+  Heroes.slots[Heroes.active] = JSON.parse(JSON.stringify(Profile)); // detach the old hero from the live object
+  for (const k of Object.keys(Profile)) delete Profile[k];
+  Object.assign(Profile, next);
+  Heroes.active = i;
+  saveProfile();
+  return true;
+}
+function heroCreate(i, name, color) { // new level-1 hero in the empty slot i (becomes the active one)
+  if (i < 0 || i >= HERO_SLOTS || Heroes.slots[i]) return false;
+  Heroes.slots[i] = fixHero(newHeroData(name, color));
+  return heroActivate(i);
+}
+function heroDelete(i) { // never the last hero; deleting the active one switches to another first
+  if (!Heroes.slots[i] || heroCount() < 2) return false;
+  if (i === Heroes.active) heroActivate(Heroes.slots.findIndex((h, j) => h && j !== i));
+  Heroes.slots[i] = null;
+  saveProfile();
+  return true;
+}
 function equipped() { return Profile.inv[Profile.eq] || Profile.inv[0]; }
 function myStats() { return { lvl: Profile.lvl, wpn: equipped(), name: Profile.name || 'Hero', color: Profile.color, boosts: Profile.boosts, skin: Profile.skin || '', ph: Profile.pots.phoenix > 0 ? 1 : 0 }; }
 
