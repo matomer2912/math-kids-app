@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url("fonts/plex-sans-400.ttf"); }
+      @font-face { font-family: "IBM Plex Sans"; font-weight: 500; src: url("fonts/plex-sans-500.ttf"); }
+      @font-face { font-family: "IBM Plex Sans"; font-weight: 600; src: url("fonts/plex-sans-600.ttf"); }
+      @font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url("fonts/plex-mono-400.ttf"); }
+      @font-face { font-family: "IBM Plex Mono"; font-weight: 500; src: url("fonts/plex-mono-500.ttf"); }
+      @font-face { font-family: "IBM Plex Serif"; font-weight: 400; src: url("fonts/plex-serif-400.ttf"); }
+
+      :root {
+        --bg: #f2f4f8;
+        --surface: #ffffff;
+        --ink: #121619;
+        --ink-2: #343a3f;
+        --muted: #5f666d;
+        --line: #dde1e6;
+        --line-2: #c1c7cd;
+        --field: #f4f4f4;
+        --accent: #ffb000;
+        --teal: #00786f;
+        --teal-tint: #d9eeeb;
+        --sans: "IBM Plex Sans", system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+        --serif: "IBM Plex Serif", Georgia, serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+
+      #root { position: relative; width: 1920px; height: 1080px; background: var(--bg); overflow: hidden; font-family: var(--sans); color: var(--ink); }
+
+      /* soft atmosphere */
+      .glow { position: absolute; border-radius: 50%; filter: blur(120px); pointer-events: none; }
+      #glow-a { width: 760px; height: 760px; left: -120px; top: -200px; background: var(--teal-tint); opacity: 0.8; }
+      #glow-b { width: 640px; height: 640px; right: -80px; bottom: -220px; background: #ffe9b3; opacity: 0.55; }
+
+      /* ---------- ghosts: the 21 separate builders ---------- */
+      #ghosts { position: absolute; inset: 0; }
+      .ghost { position: absolute; display: flex; gap: 8px; align-items: center; white-space: nowrap; will-change: transform, opacity; }
+      .gc { font-size: 20px; line-height: 1; padding: 11px 16px; color: var(--ink-2); }
+      .gc b { font-weight: 600; }
+      .v0 .gc { background: #fff; border: 1px solid var(--line-2); border-radius: 999px; }
+      .v1 .gc { background: #fff; border: 1.5px solid var(--ink-2); border-radius: 2px; font-family: var(--mono); font-size: 18px; }
+      .v2 .gc { background: var(--ink-2); color: #fff; border-radius: 6px; }
+      .v3 .gc { background: var(--teal-tint); color: var(--teal); border-radius: 14px; }
+      .v4 .gc { background: #fff; border-bottom: 2px solid var(--line-2); border-radius: 0; font-family: var(--serif); }
+      .v4 .gc::after, .v1 .gc:last-child::after { content: " \25BE"; color: var(--muted); }
+
+      /* ---------- the one component ---------- */
+      #stage { position: absolute; inset: 0; transform-origin: 800px 520px; }
+      #card {
+        position: absolute; left: 340px; top: 150px; width: 1240px; height: 790px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+        display: flex; flex-direction: column;
+        box-shadow: 0 40px 120px rgba(18, 22, 25, 0.10), 0 4px 16px rgba(18, 22, 25, 0.05);
+        opacity: 0;
+      }
+      .chrome { flex: none; height: 44px; background: #f9fafb; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 9px; padding-left: 20px; }
+      .chrome i { width: 12px; height: 12px; border-radius: 50%; background: var(--line-2); display: block; }
+      .topbar { flex: none; height: 52px; background: #161616; color: #fff; display: flex; align-items: center; padding-left: 26px; font-size: 17px; letter-spacing: 0.1px; }
+      .topbar b { font-weight: 600; margin-left: 6px; }
+      .head { padding: 26px 40px 28px; }
+      .crumbs { font-size: 16px; color: var(--muted); }
+      .crumbs u { text-decoration: none; color: #0f62fe; }
+      .title { font-size: 40px; font-weight: 400; margin-top: 10px; letter-spacing: -0.2px; }
+      .sub { font-size: 16px; color: var(--muted); margin-top: 8px; }
+      .body { background: var(--field); flex: 1; padding: 34px 40px; border-top: 1px solid var(--line); }
+      .sec { font-size: 26px; }
+      .help { font-size: 16px; color: var(--muted); margin-top: 8px; max-width: 760px; line-height: 22px; }
+      .lbl { font-size: 15px; font-weight: 600; margin: 26px 0 8px; letter-spacing: 0.1px; }
+
+      .row { display: flex; gap: 2px; margin-bottom: 4px; align-items: stretch; position: relative; }
+      .cell { background: #fff; height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font-size: 19px; white-space: nowrap; }
+      .cell.kw { width: 92px; color: var(--ink-2); }
+      .cell .f { font-weight: 600; }
+      .cell .o { color: var(--muted); font-size: 17px; }
+      .cell svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 1.2; flex: none; }
+      .cell .x { width: 18px; height: 18px; margin-left: 8px; stroke: var(--ink-2); stroke-width: 1.5; }
+      .cell.add { width: 54px; padding: 0; justify-content: center; }
+      .uline { position: absolute; left: 94px; bottom: -3px; height: 3px; background: var(--teal); transform-origin: 0 50%; }
+      #r1 .uline { width: 700px; } #r2 .uline { width: 470px; }
+
+      .badge { position: absolute; right: 40px; bottom: 34px; display: flex; align-items: center; gap: 10px; background: var(--teal-tint); color: var(--teal); font-family: var(--mono); font-size: 17px; padding: 12px 18px; border-radius: 999px; opacity: 0; }
+      .badge i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: block; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="9" data-width="1920" data-height="1080">
+      <div id="glow-a" class="glow" data-layout-allow-overflow></div>
+      <div id="glow-b" class="glow" data-layout-allow-overflow></div>
+      <div id="ghosts" aria-hidden="true" data-layout-ignore></div>
+
+      <div id="stage">
+        <div id="card">
+          <div class="chrome"><i></i><i></i><i></i></div>
+          <div class="topbar">IBM <b>Policy Studio</b></div>
+          <div class="head" id="head">
+            <div class="crumbs"><u>Rules</u> &nbsp;/&nbsp; <u>Pricing</u> &nbsp;/&nbsp; New rule</div>
+            <div class="title">New pricing rule</div>
+            <div class="sub">Individual life insurance</div>
+          </div>
+          <div class="body">
+            <div class="sec">Eligibility</div>
+            <div class="help">Choose which customers this rule applies to. It is checked every time a quote is requested.</div>
+
+            <div class="lbl">Condition</div>
+            <div class="row" id="r1">
+              <div class="cell kw">if</div>
+              <div class="cell chip"><svg viewBox="0 0 16 16"><path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="1"/></svg><span class="f">Product</span><span class="o">is</span><span>Life insurance</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+              <div class="cell kw" style="width:72px">and</div>
+              <div class="cell chip"><svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg><span class="f">Age</span><span class="o">is below</span><span>25</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+              <div class="uline"></div>
+            </div>
+            <div class="row" id="r2">
+              <div class="cell kw">and</div>
+              <div class="cell chip"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/></svg><span class="f">Region</span><span class="o">is</span><span>North America</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+              <div class="cell add chip"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v5M5.5 8h5"/></svg></div>
+              <div class="uline"></div>
+            </div>
+
+            <div class="lbl" style="margin-top:34px">Action</div>
+            <div class="row" id="r3">
+              <div class="cell kw">then</div>
+              <div class="cell chip"><span>Apply 10% discount</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+            </div>
+            <div class="row" id="r4">
+              <div class="cell kw">and</div>
+              <div class="cell chip"><span>Notify underwriter</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+              <div class="cell add chip"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.5v5M5.5 8h5"/></svg></div>
+            </div>
+          </div>
+          <div class="badge" id="badge"><i></i>3 conditions · 2 actions</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---- seeded PRNG: the scatter layout is identical on every render ----
+      function rng(a) { return function () { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+      const rand = rng(2912);
+      const PHRASES = [
+        ["status", "= active"], ["region", "in EU"], ["age", "> 25"], ["plan", "is Pro"],
+        ["country", "is DE"], ["tier", "≥ 2"], ["product", "= life"], ["channel", "web"],
+        ["risk", "< 0.4"], ["segment", "SMB"], ["currency", "USD"], ["owner", "me"],
+      ];
+      const ghostsEl = document.getElementById("ghosts");
+      const ghosts = [];
+      const COLS = 7, ROWS = 3, N = 21;
+      for (let i = 0; i < N; i++) {
+        const c = i % COLS, r = Math.floor(i / COLS);
+        const depth = 0.75 + rand() * 0.6;
+        const el = document.createElement("div");
+        el.className = "ghost v" + (i % 5);
+        const n = 2 + (rand() > 0.55 ? 1 : 0);
+        for (let k = 0; k < n; k++) {
+          const p = PHRASES[Math.floor(rand() * PHRASES.length)];
+          const s = document.createElement("span");
+          s.className = "gc";
+          s.innerHTML = "<b>" + p[0] + "</b> " + p[1];
+          el.appendChild(s);
+        }
+        const x = 40 + c * 262 + (rand() - 0.5) * 120;
+        const y = 90 + r * 330 + ((c % 2) * 90) + (rand() - 0.5) * 110;
+        const rot = (rand() - 0.5) * 6;
+        const base = 0.62 * depth;
+        gsap.set(el, { x, y, rotation: rot, scale: depth, opacity: base, transformOrigin: "50% 50%" });
+        ghostsEl.appendChild(el);
+        ghosts.push({ el, x, y, rot, depth, base, dx: (rand() - 0.5) * 70, dy: -40 - rand() * 60 });
+      }
+
+      const tl = gsap.timeline({ paused: true });
+
+      // 0 – 2.6s  scattered builders drift, unhurried
+      ghosts.forEach((g) => {
+        tl.to(g.el, { x: g.x + g.dx, y: g.y + g.dy, rotation: g.rot * 1.6, duration: 2.8, ease: "sine.inOut" }, 0);
+      });
+
+      // 2.4 – 5.6s  they glide toward the middle and dissolve (centre-out cascade)
+      ghosts.forEach((g, i) => {
+        const cx = g.x + g.dx, cy = g.y + g.dy;
+        const dist = Math.hypot(cx - 960, cy - 540) / 1100;
+        const at = 2.6 + dist * 0.7;
+        tl.to(g.el, {
+          x: cx + (960 - cx) * 0.55, y: cy + (540 - cy) * 0.55,
+          scale: g.depth * 0.7, rotation: 0, opacity: 0, filter: "blur(10px)",
+          duration: 2.4, ease: "power2.inOut",
+        }, at);
+      });
+
+      // the one component arrives: zoomed-in and soft, then focuses
+      tl.fromTo("#card", { opacity: 0, y: 36, scale: 0.94, filter: "blur(14px)" },
+        { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 2.4, ease: "power2.inOut" }, 3.0);
+
+      // slow camera pull-back, from the condition rows out to the whole window
+      tl.fromTo("#stage", { scale: 1.3, x: 0, y: 0 },
+        { scale: 1, x: 0, y: 0, duration: 4.4, ease: "power3.inOut" }, 3.0);
+
+      // chips settle one by one
+      const rows = ["#r1", "#r2", "#r3", "#r4"];
+      tl.from("#head", { opacity: 0, y: 14, duration: 1.4, ease: "power2.out" }, 3.4);
+      rows.forEach((sel, i) => {
+        tl.from(sel + " .cell", { opacity: 0, x: -34, filter: "blur(6px)", duration: 1.5, stagger: 0.16, ease: "power3.out" }, 3.8 + i * 0.38);
+      });
+
+      // quiet teal underlines glide across the condition rows
+      tl.fromTo("#r1 .uline", { scaleX: 0 }, { scaleX: 1, duration: 1.8, ease: "power2.inOut" }, 5.5);
+      tl.fromTo("#r2 .uline", { scaleX: 0 }, { scaleX: 1, duration: 1.8, ease: "power2.inOut" }, 5.8);
+      tl.to(".uline", { opacity: 0, duration: 1.0, ease: "sine.inOut" }, 7.2);
+
+      tl.to("#badge", { opacity: 1, y: -6, duration: 1.2, ease: "power2.out" }, 6.0);
+
+      // 7.2 – 8.7s  fold away, back into the scatter
+      tl.to("#card", { opacity: 0, scale: 0.97, y: -10, filter: "blur(10px)", duration: 1.5, ease: "power2.inOut" }, 7.2);
+
+      // 7.0 – 9.0s  the builders return to their exact starting positions (seamless loop)
+      ghosts.forEach((g, i) => {
+        tl.to(g.el, { x: g.x, y: g.y, scale: g.depth, rotation: g.rot, opacity: g.base, filter: "blur(0px)", duration: 1.55, ease: "power2.out" }, 7.0 + (i % 7) * 0.065);
+      });
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
