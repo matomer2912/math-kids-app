@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="vendor/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url("fonts/plex-sans-400.ttf"); }
+      @font-face { font-family: "IBM Plex Sans"; font-weight: 500; src: url("fonts/plex-sans-500.ttf"); }
+      @font-face { font-family: "IBM Plex Sans"; font-weight: 600; src: url("fonts/plex-sans-600.ttf"); }
+      @font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url("fonts/plex-mono-400.ttf"); }
+      @font-face { font-family: "IBM Plex Mono"; font-weight: 500; src: url("fonts/plex-mono-500.ttf"); }
+      @font-face { font-family: "IBM Plex Serif"; font-weight: 400; src: url("fonts/plex-serif-400.ttf"); }
+
+      :root {
+        --ink: #121619; --ink-2: #343a3f; --muted: #5f666d; --line: #c1c7cd;
+        --teal: #00786f; --teal-tint: #d9eeeb; --amber: #ffb000;
+        --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace; --serif: "IBM Plex Serif", Georgia, serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #eef2f6; }
+      #root {
+        position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: var(--sans); color: var(--ink);
+        background: radial-gradient(1200px 800px at 18% 12%, #fff 0%, rgba(255,255,255,0) 60%), linear-gradient(170deg, #f7f9fc 0%, #e9eff4 55%, #e3eaf0 100%);
+      }
+
+      /* light */
+      .lt { position: absolute; pointer-events: none; }
+      #bounce-teal { width: 900px; height: 900px; left: -360px; bottom: -420px; border-radius: 50%; background: #bfe3de; filter: blur(140px); opacity: 0.7; }
+      #rim-amber { width: 800px; height: 800px; right: -300px; top: -260px; border-radius: 50%; background: #ffd98a; filter: blur(150px); opacity: 0.55; }
+      #beam { width: 760px; height: 1700px; left: 80px; top: -300px; transform: rotate(24deg); background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.7) 50%, rgba(255,255,255,0)); filter: blur(46px); opacity: 0.7; }
+      #vignette { inset: 0; background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 55%, rgba(40,62,84,0.15) 100%); z-index: 50; }
+
+      #world { position: absolute; inset: 0; }
+      .sc { position: absolute; inset: 0; }
+
+      /* type */
+      .eyebrow { font-family: var(--mono); font-size: 22px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--teal); }
+      .h { font-family: var(--serif); font-weight: 400; font-size: 118px; line-height: 1.06; letter-spacing: -1.5px; color: var(--ink); }
+      .sub { font-size: 34px; line-height: 1.35; color: var(--ink-2); max-width: 900px; }
+      .abs { position: absolute; }
+
+      /* chips (shared language with the loop) */
+      .cell { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+      .chip { position: relative; background: #fff; border-radius: 12px; box-shadow: 0 26px 50px -14px rgba(28,52,76,.22), 0 6px 14px rgba(28,52,76,.08), inset 0 1px 0 #fff; }
+      .chip .f { font-weight: 600; } .chip .o { color: var(--muted); }
+      .chip svg { width: 36px; height: 36px; fill: none; stroke: var(--ink); stroke-width: 1.2; flex: none; }
+      .chip svg.x { width: 28px; height: 28px; margin-left: 10px; stroke: var(--muted); stroke-width: 1.5; }
+      .kw { justify-content: center; color: var(--muted); font-weight: 500; }
+
+      /* S1: the field of 21 builders */
+      .mr { position: absolute; left: 0; top: 0; display: flex; gap: 4px; align-items: center; font-size: 23px; white-space: nowrap; }
+      .mr .k { padding: 10px 12px; color: var(--muted); }
+      .mr .c { padding: 11px 16px; color: var(--ink-2); background: #fff; box-shadow: 0 10px 22px -8px rgba(28,52,76,.2); }
+      .mr .c b { font-weight: 600; }
+      .v0 .c { border-radius: 999px; }
+      .v1 .c { border-radius: 2px; border: 1.5px solid var(--ink-2); box-shadow: none; font-family: var(--mono); font-size: 20px; }
+      .v2 .c { border-radius: 6px; background: var(--ink-2); color: #fff; }
+      .v3 .c { border-radius: 14px; background: var(--teal-tint); color: var(--teal); box-shadow: none; }
+      .v4 .c { border-radius: 0; box-shadow: none; border-bottom: 2px solid var(--line); font-family: var(--serif); }
+      .mr.hero { font-size: 23px; }
+
+      /* S2: people */
+      .dot { position: absolute; width: 26px; height: 26px; border-radius: 50%; left: 0; top: 0; }
+
+      /* S3: numbers */
+      .num { position: absolute; left: 160px; top: 300px; }
+      .num .n { font-family: var(--serif); font-size: 330px; line-height: 1; letter-spacing: -6px; color: var(--ink); }
+      .num .l { font-size: 36px; color: var(--ink-2); margin-top: 8px; max-width: 760px; }
+      #pill { position: absolute; left: 160px; top: 660px; display: flex; gap: 6px; font-size: 46px; }
+      #pill .cell { height: 100px; padding: 0 36px; }
+      #pill .t { color: var(--teal); font-family: var(--mono); font-weight: 500; }
+      #pill .fl { color: var(--muted); font-family: var(--mono); font-weight: 500; }
+
+      /* S4: the rule that broke */
+      #box { position: absolute; left: 260px; top: 390px; width: 1400px; height: 520px; border: 3px dashed #8a95a0; border-radius: 22px; }
+      #boxlbl { position: absolute; left: 300px; top: 342px; background: #eef2f6; padding: 0 14px; }
+      .card { position: absolute; top: 500px; width: 224px; height: 300px; background: #fff; border-radius: 14px; border: 1.5px solid #dde1e6; box-shadow: 0 24px 44px -16px rgba(28,52,76,.2); padding: 22px; }
+      .card .ln { height: 12px; border-radius: 6px; background: #e4e8ed; margin-bottom: 14px; }
+      .card .nm { position: absolute; left: 22px; bottom: 20px; font-family: var(--mono); font-size: 20px; color: var(--muted); }
+
+      /* S5: ship */
+      #hero1, #hero2 { position: absolute; display: flex; gap: 6px; font-size: 34px; }
+      #hero1 .cell, #hero2 .cell { height: 100px; padding: 0 28px; } #hero1 .kw, #hero2 .kw { padding: 0; width: 120px; font-size: 30px; }
+      #hero1 .chip .o, #hero2 .chip .o { font-size: 30px; }
+      .stat { position: absolute; top: 760px; }
+      .stat .n { font-family: var(--serif); font-size: 108px; line-height: 1; letter-spacing: -2px; }
+      .stat .n i { font-style: normal; color: var(--teal); margin: 0 10px; }
+      .stat .l { font-size: 26px; color: var(--ink-2); margin-top: 10px; max-width: 420px; line-height: 1.3; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="26.5" data-width="1920" data-height="1080">
+      <div id="bounce-teal" class="lt" data-layout-allow-overflow></div>
+      <div id="rim-amber" class="lt" data-layout-allow-overflow></div>
+      <div id="beam" class="lt" data-layout-allow-overflow></div>
+
+      <div id="world">
+        <!-- S1/S2/S3 share the field of builders (decorative) -->
+        <div id="field" class="sc" aria-hidden="true" data-layout-ignore></div>
+        <div id="people" class="sc" aria-hidden="true" data-layout-ignore></div>
+
+        <!-- S1 -->
+        <div id="s1" class="sc">
+          <div class="abs eyebrow" id="s1e" style="left:160px; top:380px">The same logic, over and over</div>
+          <div class="abs h" id="s1h" style="left:160px; top:430px; width:1300px">21 condition builders.</div>
+        </div>
+
+        <!-- S2 -->
+        <div id="s2" class="sc">
+          <div class="abs eyebrow" id="s2e" style="left:0; width:1920px; text-align:center; top:392px">A side initiative</div>
+          <div class="abs h" id="s2h" style="left:0; width:1920px; text-align:center; top:440px">I volunteered.</div>
+          <div class="abs sub" id="s2s" style="left:610px; width:700px; text-align:center; top:610px">About twelve designers. One shared problem.</div>
+        </div>
+
+        <!-- S3 -->
+        <div id="s3" class="sc">
+          <div class="num" id="n1"><div class="n">10</div><div class="l">screenshots, from an open call to product leads</div></div>
+          <div class="num" id="n2"><div class="n">24</div><div class="l">builders in one catalog</div></div>
+          <div class="num" id="n3"><div class="n">21</div><div class="l">unique builders, once validated</div></div>
+          <div class="num" id="n4"><div class="n">12</div><div class="l">feature combinations cover every one of them</div></div>
+          <div class="abs eyebrow" id="s3e" style="left:160px; top:230px">Key finding</div>
+          <div class="abs h" id="s3h" style="left:160px; top:270px; width:1300px; font-size:104px">Behind 21 interfaces, one output.</div>
+          <div id="pill"><div class="cell chip"><span class="t">true</span></div><div class="cell kw" style="width:80px; font-size:30px">or</div><div class="cell chip"><span class="fl">false</span></div></div>
+        </div>
+
+        <!-- S4 -->
+        <div id="s4" class="sc">
+          <div class="abs eyebrow" id="s4e" style="left:160px; top:130px">The turning point</div>
+          <div class="abs h" id="s4h" style="left:160px; top:170px; width:1500px; font-size:104px">We broke our own rule.</div>
+          <div id="box"></div>
+          <div id="boxlbl" class="eyebrow" style="color:#5f666d">Only existing Carbon parts</div>
+          <div class="card" style="left:315px"><div class="ln" style="width:80%"></div><div class="ln"></div><div class="ln" style="width:60%"></div><div class="ln" style="width:90%"></div><div class="nm">A · Cards</div></div>
+          <div class="card" style="left:585px"><div class="ln" style="width:50%"></div><div class="ln" style="width:70%; margin-left:30px"></div><div class="ln" style="width:70%; margin-left:30px"></div><div class="ln" style="width:50%"></div><div class="nm">B · Tree</div></div>
+          <div class="card" style="left:855px"><div class="ln"></div><div class="ln" style="background:#cfd6dd"></div><div class="ln"></div><div class="ln" style="background:#cfd6dd"></div><div class="nm">C · Table</div></div>
+          <div class="card" style="left:1125px"><div class="ln" style="width:85%"></div><div class="ln" style="width:85%"></div><div class="ln" style="width:85%"></div><div class="ln" style="width:85%"></div><div class="nm">D · Reorder</div></div>
+          <div class="card" style="left:1395px"><div class="ln" style="width:90%"></div><div class="ln" style="width:70%; margin-left:20px"></div><div class="ln" style="width:50%; margin-left:40px"></div><div class="ln" style="width:70%; margin-left:20px"></div><div class="nm">E · Nested</div></div>
+        </div>
+
+        <!-- S5 -->
+        <div id="s5" class="sc">
+          <div class="abs eyebrow" id="s5e" style="left:160px; top:110px">The Condition Builder Component</div>
+          <div class="abs h" id="s5h" style="left:160px; top:150px; width:1760px; font-size:88px; white-space:nowrap">21 condition builders. One component.</div>
+          <div id="hero1" style="left:160px; top:410px">
+            <div class="cell kw">if</div>
+            <div class="cell chip"><svg viewBox="0 0 16 16"><path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.5" cy="5.5" r="1"/></svg><span class="f">Product</span><span class="o">is</span><span>Life insurance</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+            <div class="cell kw" style="width:110px">and</div>
+            <div class="cell chip"><svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></svg><span class="f">Age</span><span class="o">is below</span><span>25</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+          </div>
+          <div id="hero2" style="left:160px; top:544px">
+            <div class="cell kw">then</div>
+            <div class="cell chip"><span class="f">Apply 10% discount</span><svg class="x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></div>
+          </div>
+          <div class="stat" id="st1" style="left:160px"><div class="n">21<i>→</i>1</div><div class="l">separate builders unified into one component</div></div>
+          <div class="stat" id="st2" style="left:760px"><div class="n">9</div><div class="l">product design leads committed to adopt it</div></div>
+          <div class="stat" id="st3" style="left:1260px"><div class="n">12<i>→</i>2</div><div class="l">feature combinations covered by two variants</div></div>
+        </div>
+      </div>
+      <div id="vignette" class="lt"></div>
+    </div>
+
+    <script>
+      window.__hfBuild = function () {
+        const tl = gsap.timeline({ paused: true });
+        const E = { soft: "sine.inOut", out: "power3.out", io: "power2.inOut" };
+        const fadeIn = (sel, at, d = 1.2, y = 18) => tl.fromTo(sel, { opacity: 0, y, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: d, ease: E.out }, at);
+        const fadeOut = (sel, at, d = 1.0) => tl.to(sel, { opacity: 0, y: -14, filter: "blur(10px)", duration: d, ease: "sine.in" }, at);
+
+        // ---------- seeded field of 21 builders ----------
+        const rng = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+        const R = rng(2912);
+        const DEF = [
+          ["if", "Product", "is Life insurance"], ["when", "status", "= active"], ["where", "country", "in DE, FR"], ["IF", "age", "> 25"],
+          ["exclude", "plan", "is Free"], ["if", "Region", "is EU"], ["when", "tier", "≥ 2"], ["if", "channel", "is Web"], ["where", "currency", "= USD"],
+          ["when", "owner", "is me"], ["IF", "segment", "is SMB"], ["if", "risk", "< 0.4"], ["where", "state", "= open"], ["when", "type", "is new"],
+          ["if", "score", "> 80"], ["exclude", "role", "is guest"], ["IF", "region", "≠ US"], ["where", "plan", "is Pro"], ["when", "age", "< 18"],
+          ["if", "source", "is API"], ["where", "brand", "= IBM"],
+        ];
+        const fieldEl = document.getElementById("field");
+        const rows = DEF.map((d, i) => {
+          const el = document.createElement("div");
+          el.className = "mr v" + (i % 5) + (i === 0 ? " hero" : "");
+          el.innerHTML = '<span class="k">' + d[0] + '</span><span class="c"><b>' + d[1] + "</b> " + d[2] + "</span>";
+          fieldEl.appendChild(el);
+          return el;
+        });
+        // measure after fonts, then place
+        const dims = rows.map((el) => ({ w: el.offsetWidth, h: el.offsetHeight }));
+        const COLS = 6, bandsY = [80, 205, 790, 915];
+        const targets = rows.map((_, i) => {
+          const b = i < 6 ? 0 : i < 12 ? 1 : i < 17 ? 2 : 3;
+          const c = b === 0 ? i : b === 1 ? i - 6 : b === 2 ? i - 12 : i - 17;
+          const cnt = b === 3 ? 4 : b === 2 ? 5 : 6;
+          return { x: 70 + c * (1780 / cnt) + (b % 2) * 40 + (R() - 0.5) * 24, y: bandsY[b] + (R() - 0.5) * 22, rot: (R() - 0.5) * 3.2 };
+        });
+        rows.forEach((el, i) => gsap.set(el, { x: 960 - dims[i].w / 2, y: 540 - dims[i].h / 2, scale: i === 0 ? 2.1 : 1.4, opacity: i === 0 ? 1 : 0, transformOrigin: "50% 50%" }));
+
+        // people ring
+        const peopleEl = document.getElementById("people");
+        const COL = ["#00786f", "#121619", "#ffb000", "#5f666d", "#00786f", "#121619", "#ffb000", "#5f666d", "#00786f", "#121619", "#ffb000", "#5f666d"];
+        const dots = COL.map((c, i) => {
+          const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+          const el = document.createElement("div");
+          el.className = "dot"; el.style.background = c;
+          peopleEl.appendChild(el);
+          const tx = 960 + Math.cos(a) * 780 - 13, ty = 540 + Math.sin(a) * 405 - 13;
+          gsap.set(el, { x: 960 + Math.cos(a) * 1250 - 13, y: 540 + Math.sin(a) * 760 - 13, opacity: 0, scale: 0.4 });
+          return { el, tx, ty, a };
+        });
+
+        gsap.set(["#s1h", "#s1e", "#s2e", "#s2h", "#s2s", "#n1", "#n2", "#n3", "#n4", "#s3e", "#s3h", "#pill", "#s4e", "#s4h", "#box", "#boxlbl", ".card", "#s5e", "#s5h", "#hero1 > *", "#hero2 > *", ".stat"], { opacity: 0 });
+
+        // ambient: light drifts the whole film, never still
+        tl.to("#beam", { x: 180, opacity: 0.9, duration: 13, ease: E.soft }, 0);
+        tl.to("#beam", { x: 0, opacity: 0.7, duration: 13.5, ease: E.soft }, 13);
+        tl.fromTo("#world", { scale: 1.0 }, { scale: 1.035, duration: 26.5, ease: "none", transformOrigin: "50% 50%" }, 0);
+
+        // ===== S1 (0 – 5.4): one rule becomes 21 =====
+        tl.to(rows[0], { scale: 2.1, duration: 0.8 }, 0); // hold the hero rule a beat
+        rows.forEach((el, i) => {
+          const t = targets[i], d = dims[i];
+          const at = i === 0 ? 1.0 : 1.0 + i * 0.07;
+          tl.to(el, { x: t.x, y: t.y, scale: 1, rotation: t.rot, opacity: i === 0 ? 0.95 : 0.7, duration: 2.4, ease: E.io }, at);
+        });
+        fadeIn("#s1e", 2.3, 1.1); fadeIn("#s1h", 2.5, 1.5);
+        // field softens behind the headline
+        tl.to("#field", { filter: "blur(2.5px)", duration: 1.8, ease: E.soft }, 2.6);
+
+        // ===== S2 (5.4 – 9.8): "I volunteered." + 12 people =====
+        fadeOut(["#s1e", "#s1h"], 5.2, 1.1);
+        tl.to(rows, { opacity: 0.18, scale: 0.92, duration: 1.6, ease: E.soft }, 5.3);
+        fadeIn("#s2e", 6.0, 1.0); fadeIn("#s2h", 6.2, 1.4); fadeIn("#s2s", 7.3, 1.2);
+        dots.forEach((d, i) => tl.to(d.el, { x: d.tx, y: d.ty, opacity: 1, scale: 1, duration: 2.4, ease: E.io }, 6.0 + i * 0.1));
+        tl.to("#people", { scale: 1.05, duration: 3.2, ease: E.soft, transformOrigin: "50% 50%" }, 6.5);
+        fadeOut(["#s2e", "#s2h", "#s2s"], 9.3, 1.0);
+
+        // ===== S3 (9.8 – 16.4): numbers, then one output =====
+        tl.to(dots.map((d) => d.el), { opacity: 0, scale: 0.4, duration: 1.2, ease: "sine.in" }, 9.4);
+        tl.to("#people", { opacity: 0, duration: 1.0 }, 9.6);
+        tl.to("#field", { opacity: 0, duration: 0.9 }, 9.6);
+        const nums = ["#n1", "#n2", "#n3", "#n4"];
+        nums.forEach((s, i) => {
+          const at = 10.0 + i * 1.15;
+          fadeIn(s, at, 0.9, 24);
+          if (i < 3) fadeOut(s, at + 0.7, 0.4);
+        });
+        // rows return, converge to one line
+        tl.set("#field", { filter: "blur(0px)" }, 13.9);
+        tl.to("#field", { opacity: 1, duration: 0.6 }, 14.0);
+        fadeOut("#n4", 14.0, 0.7);
+        rows.forEach((el, i) => {
+          const d = dims[i];
+          tl.fromTo(el, { x: targets[i].x, y: targets[i].y, scale: 1, rotation: targets[i].rot, opacity: 0.7 },
+            { x: 345 - d.w / 2, y: 710 - d.h / 2, scale: 0.6, rotation: 0, opacity: 0, duration: 1.5, ease: E.io, immediateRender: false }, 14.1 + (i % 7) * 0.04);
+        });
+        fadeIn("#s3e", 14.7, 0.9); fadeIn("#s3h", 14.95, 1.4); fadeIn("#pill", 15.7, 1.0, 14);
+        fadeOut(["#s3e", "#s3h", "#pill"], 17.3, 0.9);
+
+        // ===== S4 (17.4 – 21.4): the rule breaks =====
+        fadeIn("#s4e", 17.7, 0.9); fadeIn("#s4h", 17.9, 1.3);
+        tl.fromTo("#box", { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 1.2, ease: E.out, transformOrigin: "50% 50%" }, 18.0);
+        fadeIn("#boxlbl", 18.2, 0.9, 6);
+        tl.fromTo(".card", { opacity: 0, y: 24, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 1.1, ease: E.out, stagger: 0.12 }, 18.3);
+        // the boundary gives way; the cards drift free
+        tl.to("#box", { scale: 1.16, opacity: 0, borderColor: "#ffb000", duration: 1.5, ease: "power2.in", transformOrigin: "50% 50%" }, 19.9);
+        tl.to("#boxlbl", { opacity: 0, y: -10, duration: 0.7, ease: "sine.in" }, 19.9);
+        tl.to(".card", { x: (i) => (i - 2) * 70, opacity: 0, filter: "blur(10px)", scale: 1.08, duration: 1.5, ease: "power2.in", stagger: 0.05 }, 20.3);
+        fadeOut(["#s4e", "#s4h"], 20.7, 0.9);
+
+        // ===== S5 (21.4 – 26.5): the finished component =====
+        fadeIn("#s5e", 21.6, 0.9); fadeIn("#s5h", 21.8, 1.4);
+        tl.fromTo("#hero1 > *", { opacity: 0, x: 40, filter: "blur(14px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 1.2, ease: E.out, stagger: 0.12 }, 22.4);
+        tl.fromTo("#hero2 > *", { opacity: 0, x: 40, filter: "blur(14px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 1.2, ease: E.out, stagger: 0.12 }, 23.2);
+        fadeIn("#st1", 23.9, 1.2); fadeIn("#st2", 24.4, 1.2); fadeIn("#st3", 24.9, 1.2);
+
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+        if (window.__hfForceTimelineRebind) window.__hfForceTimelineRebind();
+      };
+      document.fonts.ready.then(window.__hfBuild);
+    </script>
+  </body>
+</html>
