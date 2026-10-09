@@ -91,7 +91,7 @@
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="36" data-width="1920" data-height="1080">
+    <div id="root" data-composition-id="main" data-start="0" data-duration="40" data-width="1920" data-height="1080">
       <div id="bounce-teal" class="lt" data-layout-allow-overflow></div>
       <div id="rim-amber" class="lt" data-layout-allow-overflow></div>
       <div id="beam" class="lt" data-layout-allow-overflow></div>
@@ -155,15 +155,15 @@
         <!-- 9 Meaning -->
         <div class="line mid abs tc" id="t9a" style="top:300px">Nine product leads said yes.</div>
         <div class="line mid abs tc teal" id="t9b" style="top:430px">Twenty-one became one.</div>
-        <div class="sub abs tc" id="t9c" style="top:620px; font-family:var(--serif); font-size:46px; color:var(--ink)"></div>
-        <div class="mono abs" id="sig" style="left:160px; top:960px">The Condition Builder Component · IBM Products</div>
+        <div class="sub abs" id="t9c" style="left:260px; width:1400px; text-align:center; top:640px; font-family:var(--serif); font-size:50px; line-height:1.3; color:var(--ink)"></div>
+        <div class="mono abs" id="sig" style="left:160px; top:960px; color:#005f57">The Condition Builder Component · IBM Products</div>
       </div>
       <div id="vignette" class="lt"></div>
     </div>
 
     <script>
       // Closing line: the designer's own sentence about what the project meant. Empty = frame is skipped.
-      const REFLECTION = "";
+      const REFLECTION = "I didn’t set out to lead. I set out to listen, and it turned out to be the same thing.";
 
       window.__hfBuild = function () {
         const tl = gsap.timeline({ paused: true });
@@ -211,8 +211,8 @@
 
         // ambient
         tl.to("#beam", { x: 200, opacity: 0.9, duration: 18, ease: E.soft }, 0);
-        tl.to("#beam", { x: 0, opacity: 0.7, duration: 18, ease: E.soft }, 18);
-        tl.fromTo("#world", { scale: 1.0 }, { scale: 1.03, duration: 36, ease: "none", transformOrigin: "50% 50%" }, 0);
+        tl.to("#beam", { x: 0, opacity: 0.7, duration: 20, ease: E.soft }, 20);
+        tl.fromTo("#world", { scale: 1.0 }, { scale: 1.03, duration: 40, ease: "none", transformOrigin: "50% 50%" }, 0);
 
         // ===== 1 BELIEF (0 – 3.8) =====
         tl.fromTo("#hero > *", { opacity: 0, x: 40, filter: "blur(14px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 1.3, ease: E.out, stagger: 0.12 }, 0.2);
@@ -281,8 +281,8 @@
         // ===== 9 MEANING (33.0 – 36) =====
         IN("#t9a", 33.2, 1.3);
         IN("#t9b", 34.4, 1.3);
-        if (REFLECTION) { document.getElementById("t9c").textContent = REFLECTION; IN("#t9c", 35.4, 0.8, 10); }
-        IN("#sig", 35.0, 0.8, 8);
+        if (REFLECTION) { document.getElementById("t9c").textContent = REFLECTION; IN("#t9c", 36.2, 1.4, 12); }
+        IN("#sig", 37.6, 0.9, 8);
 
         window.__timelines["main"] = tl;
         tl.seek(0);
